@@ -2,16 +2,18 @@
   
 # Money Tabs (Finance Tracker)
   
-**Track, merge, and organize your wealth with elegance.**
+**Track, merge, and organize your wealth with full-stack elegance.**
   
   <p align="center">
     <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
     <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
     <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind" />
-    <img src="https://img.shields.io/badge/Vite-B73BFE?style=for-the-badge&logo=vite&logoColor=FFD62E" alt="Vite" />
+    <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+    <img src="https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white" alt="Flask" />
+    <img src="https://img.shields.io/badge/SQLite-07405E?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" />
   </p>
 
-> A highly visual, drag-and-drop dashboard for tracking discrete sources of money (e.g., Bank Accounts, Wallets, Crypto). Merge tabs to view combined totals and audit your history with a beautiful glassmorphic ledger.
+> A comprehensive, highly tactile dashboard for tracking discrete sources of money (e.g., Bank Accounts, Wallets, Crypto). Merge tabs to view combined totals on the frontend, securely persisted and orchestrated by a robust Python/Flask RESTful API with an immutable SQLite audit ledger.
 
 </div>
 
@@ -26,50 +28,83 @@
 | **Drag & Drop Merging** | Organize your tabs into combined groups. Drag a tab over another to create a merged <kbd>Group Total</kbd> view, making it easy to track distinct portfolios. |
 | **Real-time Analytics** | See an interactive, responsive bar chart tracking your combined and individual balances, powered by `Recharts`. |
 | **Audit History Ledger** | Never lose track of a manual adjustment. A sleek, slide-out glassmorphic drawer records every <kbd>Quick Add</kbd> and <kbd>Spend</kbd> transaction. |
-| **Neumorphic & Glassmorphic UI** | Enjoy a premium dark-mode aesthetic with custom inner shadows, smooth gradients, and backdrop blurs. |
-| **Local Persistence** | Your custom drag-and-drop layout arrangements are securely saved to your browser's `localStorage`. |
+| **RESTful API Backend** | Fully persistent state management driven by a lightweight Flask backend operating on SQLite to ensure instantaneous updates and schema integrity. |
+| **Neumorphic UI** | Enjoy a premium dark-mode aesthetic with custom inner shadows, smooth gradients, and backdrop blurs. |
 
 ---
 
-## Interface Preview
+## System Architecture
 
-<details open>
-  <summary><strong>Theme Details</strong></summary>
-  <br/>
-  <blockquote>
-    The application utilizes a dark-slate theme <code>#151b2b</code> with vibrant emerald and teal accents to maximize focus and reduce eye strain.
-  </blockquote>
-</details>
-
-- **Dashboard**: A gorgeous horizontal masonry grid holding your customized Money Tabs.
-- **Ledger Sidebar**: A `backdrop-blur-3xl` glassmorphic drawer that slides in to reveal your financial activity trace.
-- **Creator Panel**: Clean typography and inputs to spin up a new isolated *Place Tab* with preset icons.
-
----
-
-## Architecture
-
-Money Tabs is architected for speed and modularity:
+Money Tabs utilizes a decoupled client-server architecture designed for rapid iterations and strict state encapsulation:
 
 ```mermaid
-graph TD
-    A[App.tsx Orchestrator] --> B(HeroBanner.tsx)
-    A --> C(Header.tsx)
-    A --> D(AccountGrid Groupings)
-    D --> E(AccountCard.tsx)
-    A --> F(LedgerSidebar.tsx)
-    A --> G(CreateAccountForm.tsx)
+graph LR
+    subgraph Client [Frontend - React / Vite]
+        A[App.tsx Orchestrator] --> B(Account Cards & Groups)
+        A --> C(Recharts Dashboard)
+        A --> D(Glassmorphic Ledger)
+    end
 
-    style A fill:#0f172a,stroke:#34d399,stroke-width:2px,color:#fff
-    style D fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#fff
+    subgraph Server [Backend - Python / Flask]
+        E[REST API Routes] --> F[(SQLite Database)]
+        F --> G(Accounts Table)
+        F --> H(Transactions Table)
+    end
+
+    A <== JSON over HTTP ==> E
+
+    style Client fill:#0f172a,stroke:#34d399,stroke-width:2px,color:#fff
+    style Server fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style F fill:#07405e,stroke:#fff,stroke-width:1px,color:#fff
 ```
 
-### Tech Stack Highlights
+### Backend API Endpoints
 
-- **Frontend Framework**: React 18 + Vite
-- **Styling**: Tailwind CSS *(extensively utilizing arbitrary values for custom box-shadows)*
-- **Icons**: `lucide-react`
-- **Charting**: `recharts`
+<details open>
+  <summary><strong>Core API Routes Reference</strong></summary>
+  <br />
+  <table>
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>Endpoint</th>
+        <th>Payload / Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><kbd>GET</kbd></td>
+        <td><code>/api/accounts</code></td>
+        <td>Fetches all isolated tracking tabs and their respective live balances.</td>
+      </tr>
+      <tr>
+        <td><kbd>POST</kbd></td>
+        <td><code>/api/accounts</code></td>
+        <td>Validates and instantiates a new account entity with custom icons.</td>
+      </tr>
+      <tr>
+        <td><kbd>POST</kbd></td>
+        <td><code>/api/accounts/&lt;id&gt;/adjust</code></td>
+        <td>Applies positive/negative increments, synchronously appending ledger trace lines.</td>
+      </tr>
+      <tr>
+        <td><kbd>DELETE</kbd></td>
+        <td><code>/api/accounts/&lt;id&gt;</code></td>
+        <td>Permanently removes a place tab from persistent storage.</td>
+      </tr>
+      <tr>
+        <td><kbd>GET</kbd></td>
+        <td><code>/api/transactions</code></td>
+        <td>Retrieves the immutable audit trail in reverse chronological order.</td>
+      </tr>
+      <tr>
+        <td><kbd>DELETE</kbd></td>
+        <td><code>/api/transactions/&lt;id&gt;</code></td>
+        <td>Removes a trace row while automatically triggering inverse balance corrections.</td>
+      </tr>
+    </tbody>
+  </table>
+</details>
 
 ---
 
@@ -77,63 +112,92 @@ graph TD
 
 ### Prerequisites
 
-Make sure you have [Node.js](https://nodejs.org/) installed along with `npm`, `yarn`, or `bun`.
+Ensure you have the following installed on your machine:
+- **Node.js** *(v18+ recommended)*
+- **Python** *(v3.10+ recommended)*
 
-### Installation
+---
 
-1. **Clone the repository**
+### Backend Setup (Server)
 
+1. **Navigate to the server directory**
    ```bash
-   git clone https://github.com/your-username/finance-tracker.git
-   cd finance-tracker
+   cd server
    ```
 
-2. **Navigate to the Client Directory**
+2. **Create and activate a virtual environment** *(Recommended)*
+   ```bash
+   python -m venv venv
+   
+   # On Windows:
+   venv\Scripts\activate
+   # On macOS/Linux:
+   source venv/bin/activate
+   ```
 
+3. **Install Python Dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Launch the Flask API Server**
+   ```bash
+   python app.py
+   ```
+   > The backend will bootstrap the local SQLite database (`data.db`) automatically and listen on `http://localhost:5000`.
+
+---
+
+### Frontend Setup (Client)
+
+1. **Open a new terminal window** and navigate to the client folder:
    ```bash
    cd client
    ```
 
-3. **Install Dependencies**
-
+2. **Install Node Dependencies**
    ```bash
    npm install
-   # or bun install
    ```
 
-4. **Start the Development Server**
-
+3. **Start the Vite Development Server**
    ```bash
    npm run dev
-   # or bun run dev
    ```
 
-5. **Open your browser** to `http://localhost:5173` *(or the port Vite provides)* and start tracking!
+4. **Open your browser** to the localized URL provided by Vite *(typically `http://localhost:5173`)* to interact with the complete system.
+
+> **Quick Launch Tip**: On Windows systems, you can also execute the included `start_tracker.bat` batch script from the root directory to spin up both the backend and frontend simultaneously.
 
 ---
 
 ## Project Structure
 
 <details>
-  <summary><strong>Click to expand directory tree</strong></summary>
+  <summary><strong>Click to view full repository layout</strong></summary>
 
 ```text
-client/
-├── src/
-│   ├── components/
-│   │   ├── AccountCard.tsx        # Individual tab card with Quick Actions
-│   │   ├── CreateAccountForm.tsx  # Module to generate new tabs
-│   │   ├── Header.tsx             # Navbar & Stats
-│   │   ├── HeroBanner.tsx         # Total aggregated balance & Recharts graphic
-│   │   └── LedgerSidebar.tsx      # Slide-out glassmorphic transaction history
-│   ├── types/
-│   │   └── index.ts               # Core TS Interfaces (Account, Transaction)
-│   ├── utils/
-│   │   └── icons.ts               # Dynamic Lucide icon resolution
-│   ├── App.tsx                    # Main state, drag-and-drop, and API orchestration
-│   └── main.tsx                   # React DOM Entry
-├── package.json
-└── tailwind.config.js             # Contains custom brand colors and font settings
+finance-tracker/
+├── client/                      # Frontend Client Environment
+│   ├── src/
+│   │   ├── components/          # Extracted functional UI modules
+│   │   │   ├── AccountCard.tsx
+│   │   │   ├── CreateAccountForm.tsx
+│   │   │   ├── Header.tsx
+│   │   │   ├── HeroBanner.tsx
+│   │   │   └── LedgerSidebar.tsx
+│   │   ├── types/               # Shared TS Definitions
+│   │   ├── utils/               # Dynamic icon resolvers
+│   │   └── App.tsx              # Application layout controller
+│   ├── package.json
+│   └── tailwind.config.js
+├── server/                      # Backend API Environment
+│   ├── instance/
+│   ├── app.py                   # Core Flask REST routing and SQLite schemas
+│   └── requirements.txt         # Server packages (Flask, SQLAlchemy, CORS)
+├── start_tracker.bat            # Automated combined startup helper
+├── LICENSE.md
+└── README.md
 ```
 </details>
 
@@ -146,5 +210,5 @@ This project is licensed under the **MIT License** - see the [LICENSE.md](./LICE
 <br />
 
 <div align="center">
-  <i>Built for better financial clarity.</i>
+  <i>Engineered for complete fiscal transparency.</i>
 </div>
