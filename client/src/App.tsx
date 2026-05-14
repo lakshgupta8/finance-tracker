@@ -60,8 +60,10 @@ function App() {
     const [scrollProgress, setScrollProgress] = useState(0);
 
     // Drag-and-Drop list arrangement state tracking
-    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+    const [draggedItem, setDraggedItem] = useState<{ gIdx: number, tIdx: number } | null>(null);
+    const [dragOverGroupIndex, setDragOverGroupIndex] = useState<number | null>(null);
+    const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null);
+    const [layout, setLayout] = useState<number[][]>([]);
 
     // -------------------------------------------------------------------------
     // DATA FETCHING & SYNCHRONIZATION
@@ -80,23 +82,42 @@ function App() {
 
             const fetchedAccs: Account[] = accRes.data;
             const savedOrder = localStorage.getItem('finance_tracker_tab_order');
+            let parsedLayout: number[][] = [];
             if (savedOrder) {
                 try {
-                    const orderIds: number[] = JSON.parse(savedOrder);
-                    fetchedAccs.sort((a, b) => {
-                        const idxA = orderIds.indexOf(a.id);
-                        const idxB = orderIds.indexOf(b.id);
-                        if (idxA === -1 && idxB === -1) return 0;
-                        if (idxA === -1) return 1;
-                        if (idxB === -1) return -1;
-                        return idxA - idxB;
-                    });
+                    const orderIds = JSON.parse(savedOrder);
+                    if (Array.isArray(orderIds) && orderIds.length > 0) {
+                        if (Array.isArray(orderIds[0])) {
+                            parsedLayout = orderIds;
+                        } else {
+                            parsedLayout = orderIds.map((id: number) => [id]);
+                        }
+                    }
                 } catch (e) {
                     console.error("Failed to parse saved tab order", e);
                 }
             }
 
+            const fetchedIds = new Set(fetchedAccs.map(a => a.id));
+            const finalLayout: number[][] = [];
+            const idsInLayout = new Set<number>();
+
+            parsedLayout.forEach(group => {
+                const validGroup = group.filter(id => fetchedIds.has(id));
+                if (validGroup.length > 0) {
+                    finalLayout.push(validGroup);
+                    validGroup.forEach(id => idsInLayout.add(id));
+                }
+            });
+
+            fetchedAccs.forEach(a => {
+                if (!idsInLayout.has(a.id)) {
+                    finalLayout.push([a.id]);
+                }
+            });
+
             setAccounts(fetchedAccs);
+            setLayout(finalLayout);
             setTransactions(txRes.data);
             setErrorMsg('');
         } catch (err) {
@@ -204,7 +225,7 @@ function App() {
             setNewAccName('');
             setNewAccBalance('');
             await fetchData();
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
             setErrorMsg(err.response?.data?.error || 'Failed to setup new tab.');
         } finally {
@@ -238,7 +259,7 @@ function App() {
             setAdjustAmounts(prev => ({ ...prev, [accountId]: '' }));
             setAdjustNotes(prev => ({ ...prev, [accountId]: '' }));
             await fetchData();
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
             setErrorMsg(err.response?.data?.error || 'Failed to update balance.');
         } finally {
@@ -277,31 +298,67 @@ function App() {
     // DRAG AND DROP HANDLERS
     // -------------------------------------------------------------------------
 
-    const handleDragStart = (index: number) => {
-        setDraggedIndex(index);
+    const handleDragStart = (gIdx: number, tIdx: number) => {
+        setDraggedItem({ gIdx, tIdx });
     };
 
-    const handleDragEnter = (index: number) => {
-        setDragOverIndex(index);
+    const handleDragEnter = (gIdx: number, tIdx?: number) => {
+        setDragOverGroupIndex(gIdx);
+        setDragOverTabIndex(tIdx !== undefined ? tIdx : null);
     };
 
     const handleDragEnd = () => {
-        setDraggedIndex(null);
-        setDragOverIndex(null);
+        setDraggedItem(null);
+        setDragOverGroupIndex(null);
+        setDragOverTabIndex(null);
     };
 
-    const handleDrop = (targetIndex: number) => {
-        if (draggedIndex === null || draggedIndex === targetIndex) {
+    const handleDrop = (targetGroupIndex: number, targetTabIndex?: number) => {
+        if (!draggedItem) return;
+        const { gIdx, tIdx } = draggedItem;
+
+        let newLayout = layout.map(group => [...group]);
+        const accountId = newLayout[gIdx][tIdx];
+
+        // Case 1: Dragging within the SAME group -> rearrange order
+        if (gIdx === targetGroupIndex) {
+            if (targetTabIndex !== undefined && targetTabIndex !== tIdx) {
+                newLayout[gIdx].splice(tIdx, 1);
+                newLayout[gIdx].splice(targetTabIndex, 0, accountId);
+                setLayout(newLayout);
+                localStorage.setItem('finance_tracker_tab_order', JSON.stringify(newLayout));
+            }
             handleDragEnd();
             return;
         }
 
-        const updatedAccounts = [...accounts];
-        const [movedItem] = updatedAccounts.splice(draggedIndex, 1);
-        updatedAccounts.splice(targetIndex, 0, movedItem);
+        // Case 2: Dropped onto ANOTHER group div -> Add to that group
+        newLayout[gIdx].splice(tIdx, 1);
+        if (targetTabIndex !== undefined) {
+            newLayout[targetGroupIndex].splice(targetTabIndex, 0, accountId);
+        } else {
+            newLayout[targetGroupIndex].push(accountId);
+        }
+        newLayout = newLayout.filter(g => g.length > 0);
 
-        setAccounts(updatedAccounts);
-        localStorage.setItem('finance_tracker_tab_order', JSON.stringify(updatedAccounts.map(a => a.id)));
+        setLayout(newLayout);
+        localStorage.setItem('finance_tracker_tab_order', JSON.stringify(newLayout));
+        handleDragEnd();
+    };
+
+    const handleDropOutside = () => {
+        if (!draggedItem) return;
+        const { gIdx, tIdx } = draggedItem;
+
+        // Case 3: Hold released OUTSIDE the group div -> drag out to be a separate entity
+        let newLayout = layout.map(group => [...group]);
+        if (newLayout[gIdx].length > 1) {
+            const accountId = newLayout[gIdx][tIdx];
+            newLayout[gIdx].splice(tIdx, 1);
+            newLayout.push([accountId]);
+            setLayout(newLayout);
+            localStorage.setItem('finance_tracker_tab_order', JSON.stringify(newLayout));
+        }
         handleDragEnd();
     };
 
@@ -310,7 +367,11 @@ function App() {
     // -------------------------------------------------------------------------
 
     return (
-        <div className="flex flex-col items-center bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] bg-slate-950 selection:bg-teal-500 from-slate-900 via-slate-950 to-black p-4 md:p-8 min-h-screen font-sans text-slate-100 selection:text-slate-950">
+        <div 
+            className="flex flex-col items-center bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] bg-slate-950 selection:bg-teal-500 from-slate-900 via-slate-950 to-black p-4 md:p-8 min-h-screen font-sans text-slate-100 selection:text-slate-950"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDropOutside}
+        >
 
             {/* Premium Fixed Horizontal Scroll Progress Bar */}
             <div className="top-0 left-0 z-50 fixed bg-slate-900 w-full h-1">
@@ -397,7 +458,7 @@ function App() {
                         {/* ========================================================================= */}
                         {/* THE SEPARATE PLACES/TABS GRID */}
                         {/* ========================================================================= */}
-                        {accounts.length === 0 ? (
+                        {layout.length === 0 ? (
                             <div className="flex flex-col justify-center items-center bg-slate-900/40 shadow-inner backdrop-blur-md my-4 p-10 border border-slate-800 border-dashed rounded-2xl text-center">
                                 <div className="flex justify-center items-center bg-slate-950/80 mb-3 border border-slate-800 rounded-full w-14 h-14 text-2xl">
                                     📭
@@ -409,123 +470,179 @@ function App() {
                             </div>
                         ) : (
                             <div className="gap-6 grid grid-cols-1 md:grid-cols-2">
-                                {accounts.map((account, index) => {
-                                    const isAdjusting = adjustingId === account.id;
-                                    const amountVal = adjustAmounts[account.id] || '';
-                                    const noteVal = adjustNotes[account.id] || '';
+                                {layout.map((group, groupIndex) => {
+                                    const groupAccounts = group.map(id => accounts.find(a => a.id === id)).filter(Boolean) as Account[];
+                                    if (groupAccounts.length === 0) return null;
+                                    const groupTotal = groupAccounts.reduce((acc, a) => acc + a.balance, 0);
 
                                     return (
                                         <div
-                                            key={account.id}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                const target = e.target as HTMLElement;
-                                                if (target.tagName === 'INPUT' || target.tagName === 'BUTTON') {
-                                                    e.preventDefault();
-                                                    return;
-                                                }
-                                                handleDragStart(index);
+                                            key={`group-${groupIndex}`}
+                                            className={`relative flex flex-col transition-all duration-300 ${dragOverGroupIndex === groupIndex && dragOverTabIndex === null ? 'ring-2 ring-teal-500 rounded-2xl bg-slate-800/20 z-20 scale-[1.02]' : ''}`}
+                                            onDragEnter={(e) => {
+                                                e.stopPropagation();
+                                                handleDragEnter(groupIndex);
                                             }}
-                                            onDragEnter={() => handleDragEnter(index)}
-                                            onDragEnd={handleDragEnd}
-                                            onDragOver={(e) => e.preventDefault()}
-                                            onDrop={() => handleDrop(index)}
-                                            className={`group/card relative flex flex-col justify-between bg-slate-900/60 shadow-xl backdrop-blur-xl p-5 border rounded-2xl transition-all duration-300 ${dragOverIndex === index ? 'border-teal-500 scale-[1.02] bg-slate-800/80 z-20' : 'border-slate-800 hover:border-slate-700/60'
-                                                } ${draggedIndex === index ? 'opacity-40 border-dashed border-slate-700' : ''}`}
+                                            onDragOver={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                            }}
+                                            onDrop={(e) => {
+                                                e.stopPropagation();
+                                                handleDrop(groupIndex);
+                                            }}
                                         >
-                                            <div>
-                                                {/* Tab Identity Header */}
-                                                <div className="flex justify-between items-start gap-3 mb-4">
-                                                    <div className="flex items-center gap-3 min-w-0">
-                                                        <div className="flex justify-center items-center bg-slate-950 shadow-inner border border-slate-800 rounded-xl w-10 h-10 text-lg shrink-0">
-                                                            {account.icon || '💳'}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <h3 className="font-bold text-slate-200 group-hover/card:text-white text-base truncate transition-colors">
-                                                                {account.name}
-                                                            </h3>
-                                                            <span className="font-semibold text-[10px] text-slate-500 uppercase tracking-wider">
-                                                                Separate Money Tab
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Permanent Remove Button */}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteAccount(account.id, account.name)}
-                                                        title="Remove this tab"
-                                                        className="hover:bg-rose-500/10 p-1.5 rounded-lg text-slate-600 hover:text-rose-400 transition-all duration-200 cursor-pointer"
-                                                    >
-                                                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                                                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
-                                                            <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
-                                                        </svg>
-                                                    </button>
-
+                                            {groupAccounts.length > 1 && (
+                                                <div className="z-10 relative flex justify-between items-center bg-slate-800/90 px-4 py-3 border border-slate-700 border-b-0 rounded-t-2xl font-bold text-slate-300 text-sm">
+                                                    <span className="flex items-center gap-2">
+                                                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                                                        Merged Group Total
+                                                    </span>
+                                                    <span className={groupTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                                                        ₹{groupTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
                                                 </div>
+                                            )}
+                                            <div className={`flex flex-col h-full ${groupAccounts.length > 1 ? 'border border-slate-700 rounded-b-2xl rounded-t-none overflow-hidden shadow-xl' : ''}`}>
+                                                {groupAccounts.map((account, tabIndex) => {
+                                                    const isAdjusting = adjustingId === account.id;
+                                                    const amountVal = adjustAmounts[account.id] || '';
+                                                    const noteVal = adjustNotes[account.id] || '';
+                                                    const isDragged = draggedItem?.gIdx === groupIndex && draggedItem?.tIdx === tabIndex;
 
-                                                {/* Isolated Live Current Balance Counter */}
-                                                <div className="bg-slate-950/60 mb-4.5 p-3.5 border border-slate-800/60 rounded-xl">
-                                                    <div className="mb-0.5 font-medium text-slate-500 text-xs">Current Balance</div>
-                                                    <div className={`text-2xl font-extrabold tracking-tight ${account.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                        ₹{account.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                    </div>
-                                                </div>
-
-                                                {/* Dynamic Form Controls: Add or Subtract immediately */}
-                                                <div className="space-y-2.5">
-                                                    <div className="flex items-center gap-1.5 font-semibold text-[11px] text-slate-400">
-                                                        <span>⚡ Quick Add / Subtract</span>
-                                                    </div>
-
-                                                    <div className="gap-2 grid grid-cols-2">
-                                                        <div className="relative col-span-2 sm:col-span-1">
-                                                            <span className="top-1/2 left-3 absolute font-bold text-slate-600 text-xs -translate-y-1/2">₹</span>
-                                                            <input
-                                                                type="number"
-                                                                step="any"
-                                                                placeholder="Amount"
-                                                                value={amountVal}
-                                                                onChange={(e) => setAdjustAmounts({ ...adjustAmounts, [account.id]: e.target.value })}
-                                                                className="bg-slate-950 py-1.5 pr-2.5 pl-7 border border-slate-800 focus:border-teal-500 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 w-full text-slate-200 text-xs transition-all [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder-slate-600 [appearance:textfield]"
-                                                            />
-                                                        </div>
-
-                                                        <div className="col-span-2 sm:col-span-1">
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Note (optional)"
-                                                                value={noteVal}
-                                                                onChange={(e) => setAdjustNotes({ ...adjustNotes, [account.id]: e.target.value })}
-                                                                className="bg-slate-950 px-2.5 py-1.5 border border-slate-800 focus:border-teal-500 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 w-full text-slate-200 text-xs transition-all placeholder-slate-600"
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Split Dedicated Inline Trigger Buttons */}
-                                                    <div className="gap-2 grid grid-cols-2 pt-1">
-                                                        <button
-                                                            type="button"
-                                                            disabled={isAdjusting}
-                                                            onClick={() => handleAdjustBalance(account.id, true)}
-                                                            className="flex justify-center items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 px-2 py-1.5 border border-emerald-500/20 hover:border-emerald-500/40 rounded-lg font-semibold text-emerald-400 text-xs active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
+                                                    return (
+                                                        <div
+                                                            key={account.id}
+                                                            draggable
+                                                            onDragStart={(e) => {
+                                                                const target = e.target as HTMLElement;
+                                                                if (target.tagName === 'INPUT' || target.tagName === 'BUTTON') {
+                                                                    e.preventDefault();
+                                                                    return;
+                                                                }
+                                                                handleDragStart(groupIndex, tabIndex);
+                                                            }}
+                                                            onDragEnd={handleDragEnd}
+                                                            onDragEnter={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDragEnter(groupIndex, tabIndex);
+                                                            }}
+                                                            onDragOver={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                            }}
+                                                            onDrop={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDrop(groupIndex, tabIndex);
+                                                            }}
+                                                            className={`group/card relative flex flex-col justify-between bg-slate-900/60 backdrop-blur-xl p-5 border transition-all duration-300 h-full
+                                                                ${groupAccounts.length === 1 ? 'border-slate-800 rounded-2xl hover:border-slate-700/60 shadow-xl' : 'border-t-0 border-x-0 border-b-slate-800 last:border-b-0 rounded-none bg-slate-900/40 hover:bg-slate-800/60'}
+                                                                ${isDragged ? 'opacity-40 border-dashed border-slate-700' : ''}
+                                                                ${dragOverGroupIndex === groupIndex && dragOverTabIndex === tabIndex ? 'bg-slate-800/80 ring-1 ring-teal-500' : ''}`}
                                                         >
-                                                            <span className="text-base leading-none">+</span>
-                                                            <span>Add</span>
-                                                        </button>
+                                                            <div>
+                                                                {/* Tab Identity Header */}
+                                                                <div className="flex justify-between items-start gap-3 mb-4">
+                                                                    <div className="flex items-center gap-3 min-w-0">
+                                                                        <div className="mr-1 text-slate-600 cursor-grab">
+                                                                            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                                                                                <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                                                                            </svg>
+                                                                        </div>
 
-                                                        <button
-                                                            type="button"
-                                                            disabled={isAdjusting}
-                                                            onClick={() => handleAdjustBalance(account.id, false)}
-                                                            className="flex justify-center items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 px-2 py-1.5 border border-rose-500/20 hover:border-rose-500/40 rounded-lg font-semibold text-rose-400 text-xs active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
-                                                        >
-                                                            <span className="text-base leading-none">&minus;</span>
-                                                            <span>Spend</span>
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                                        <div className="flex justify-center items-center bg-slate-950 shadow-inner border border-slate-800 rounded-xl w-10 h-10 text-lg cursor-grab shrink-0">
+                                                                            {account.icon || '💳'}
+                                                                        </div>
+                                                                        <div className="min-w-0 cursor-grab">
+                                                                            <h3 className="font-bold text-slate-200 group-hover/card:text-white text-base truncate transition-colors">
+                                                                                {account.name}
+                                                                            </h3>
+                                                                            <span className="font-semibold text-[10px] text-slate-500 uppercase tracking-wider">
+                                                                                Separate Money Tab
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Permanent Remove Button */}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteAccount(account.id, account.name)}
+                                                                        title="Remove this tab"
+                                                                        className="hover:bg-rose-500/10 p-1.5 rounded-lg text-slate-600 hover:text-rose-400 transition-all duration-200 cursor-pointer"
+                                                                    >
+                                                                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                                                                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
+                                                                            <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
+                                                                        </svg>
+                                                                    </button>
+
+                                                                </div>
+
+                                                                {/* Isolated Live Current Balance Counter */}
+                                                                <div className="bg-slate-950/60 mb-4.5 p-3.5 border border-slate-800/60 rounded-xl">
+                                                                    <div className="mb-0.5 font-medium text-slate-500 text-xs">Current Balance</div>
+                                                                    <div className={`text-2xl font-extrabold tracking-tight ${account.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                        ₹{account.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Dynamic Form Controls: Add or Subtract immediately */}
+                                                                <div className="space-y-2.5">
+                                                                    <div className="flex items-center gap-1.5 font-semibold text-[11px] text-slate-400">
+                                                                        <span>⚡ Quick Add / Subtract</span>
+                                                                    </div>
+
+                                                                    <div className="gap-2 grid grid-cols-2">
+                                                                        <div className="relative col-span-2 sm:col-span-1">
+                                                                            <span className="top-1/2 left-3 absolute font-bold text-slate-600 text-xs -translate-y-1/2">₹</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                step="any"
+                                                                                placeholder="Amount"
+                                                                                value={amountVal}
+                                                                                onChange={(e) => setAdjustAmounts({ ...adjustAmounts, [account.id]: e.target.value })}
+                                                                                className="bg-slate-950 py-1.5 pr-2.5 pl-7 border border-slate-800 focus:border-teal-500 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 w-full text-slate-200 text-xs transition-all [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder-slate-600 [appearance:textfield]"
+                                                                            />
+                                                                        </div>
+
+                                                                        <div className="col-span-2 sm:col-span-1">
+                                                                            <input
+                                                                                type="text"
+                                                                                placeholder="Note (optional)"
+                                                                                value={noteVal}
+                                                                                onChange={(e) => setAdjustNotes({ ...adjustNotes, [account.id]: e.target.value })}
+                                                                                className="bg-slate-950 px-2.5 py-1.5 border border-slate-800 focus:border-teal-500 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 w-full text-slate-200 text-xs transition-all placeholder-slate-600"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Split Dedicated Inline Trigger Buttons */}
+                                                                    <div className="gap-2 grid grid-cols-2 pt-1">
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={isAdjusting}
+                                                                            onClick={() => handleAdjustBalance(account.id, true)}
+                                                                            className="flex justify-center items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 px-2 py-1.5 border border-emerald-500/20 hover:border-emerald-500/40 rounded-lg font-semibold text-emerald-400 text-xs active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
+                                                                        >
+                                                                            <span className="text-base leading-none">+</span>
+                                                                            <span>Add</span>
+                                                                        </button>
+
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={isAdjusting}
+                                                                            onClick={() => handleAdjustBalance(account.id, false)}
+                                                                            className="flex justify-center items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 px-2 py-1.5 border border-rose-500/20 hover:border-rose-500/40 rounded-lg font-semibold text-rose-400 text-xs active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
+                                                                        >
+                                                                            <span className="text-base leading-none">&minus;</span>
+                                                                            <span>Spend</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     );
