@@ -4,7 +4,7 @@
  * Mirrors physical note-taking tabs to easily add or subtract money per location.
  * ============================================================================= */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 
 // -----------------------------------------------------------------------------
@@ -59,6 +59,10 @@ function App() {
     // Dynamic horizontal page scroll progress tracker percentage
     const [scrollProgress, setScrollProgress] = useState(0);
 
+    // Drag-and-Drop list arrangement state tracking
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
     // -------------------------------------------------------------------------
     // DATA FETCHING & SYNCHRONIZATION
     // -------------------------------------------------------------------------
@@ -73,7 +77,26 @@ function App() {
                 axios.get('/api/accounts'),
                 axios.get('/api/transactions')
             ]);
-            setAccounts(accRes.data);
+
+            const fetchedAccs: Account[] = accRes.data;
+            const savedOrder = localStorage.getItem('finance_tracker_tab_order');
+            if (savedOrder) {
+                try {
+                    const orderIds: number[] = JSON.parse(savedOrder);
+                    fetchedAccs.sort((a, b) => {
+                        const idxA = orderIds.indexOf(a.id);
+                        const idxB = orderIds.indexOf(b.id);
+                        if (idxA === -1 && idxB === -1) return 0;
+                        if (idxA === -1) return 1;
+                        if (idxB === -1) return -1;
+                        return idxA - idxB;
+                    });
+                } catch (e) {
+                    console.error("Failed to parse saved tab order", e);
+                }
+            }
+
+            setAccounts(fetchedAccs);
             setTransactions(txRes.data);
             setErrorMsg('');
         } catch (err) {
@@ -102,6 +125,51 @@ function App() {
         window.addEventListener('scroll', handleScroll);
         handleScroll();
         return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    // High-fidelity edge auto-scrolling loop while dragging close to viewport boundaries
+    const scrollSpeedRef = useRef<number>(0);
+    const scrollFrameRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        const performSmoothScroll = () => {
+            if (scrollSpeedRef.current !== 0) {
+                window.scrollBy({ top: scrollSpeedRef.current, left: 0, behavior: 'auto' });
+            }
+            scrollFrameRef.current = requestAnimationFrame(performSmoothScroll);
+        };
+
+        scrollFrameRef.current = requestAnimationFrame(performSmoothScroll);
+
+        const handleGlobalDragOver = (e: DragEvent) => {
+            const buffer = 140; // Proximity detection boundary in pixels
+            const maxSpeed = 18; // Silky peak scroll intensity per frame
+
+            if (e.clientY < buffer) {
+                const intensity = (buffer - e.clientY) / buffer;
+                scrollSpeedRef.current = -(intensity * maxSpeed);
+            } else if (e.clientY > window.innerHeight - buffer) {
+                const intensity = (e.clientY - (window.innerHeight - buffer)) / buffer;
+                scrollSpeedRef.current = intensity * maxSpeed;
+            } else {
+                scrollSpeedRef.current = 0;
+            }
+        };
+
+        const handleGlobalDragEnd = () => {
+            scrollSpeedRef.current = 0;
+        };
+
+        window.addEventListener('dragover', handleGlobalDragOver);
+        window.addEventListener('dragend', handleGlobalDragEnd);
+        window.addEventListener('drop', handleGlobalDragEnd);
+
+        return () => {
+            if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+            window.removeEventListener('dragover', handleGlobalDragOver);
+            window.removeEventListener('dragend', handleGlobalDragEnd);
+            window.removeEventListener('drop', handleGlobalDragEnd);
+        };
     }, []);
 
     // =========================================================================
@@ -203,6 +271,38 @@ function App() {
             console.error(err);
             setErrorMsg('Failed to remove trace record.');
         }
+    };
+
+    // -------------------------------------------------------------------------
+    // DRAG AND DROP HANDLERS
+    // -------------------------------------------------------------------------
+
+    const handleDragStart = (index: number) => {
+        setDraggedIndex(index);
+    };
+
+    const handleDragEnter = (index: number) => {
+        setDragOverIndex(index);
+    };
+
+    const handleDragEnd = () => {
+        setDraggedIndex(null);
+        setDragOverIndex(null);
+    };
+
+    const handleDrop = (targetIndex: number) => {
+        if (draggedIndex === null || draggedIndex === targetIndex) {
+            handleDragEnd();
+            return;
+        }
+
+        const updatedAccounts = [...accounts];
+        const [movedItem] = updatedAccounts.splice(draggedIndex, 1);
+        updatedAccounts.splice(targetIndex, 0, movedItem);
+
+        setAccounts(updatedAccounts);
+        localStorage.setItem('finance_tracker_tab_order', JSON.stringify(updatedAccounts.map(a => a.id)));
+        handleDragEnd();
     };
 
     // -------------------------------------------------------------------------
@@ -309,7 +409,7 @@ function App() {
                             </div>
                         ) : (
                             <div className="gap-6 grid grid-cols-1 md:grid-cols-2">
-                                {accounts.map((account) => {
+                                {accounts.map((account, index) => {
                                     const isAdjusting = adjustingId === account.id;
                                     const amountVal = adjustAmounts[account.id] || '';
                                     const noteVal = adjustNotes[account.id] || '';
@@ -317,7 +417,21 @@ function App() {
                                     return (
                                         <div
                                             key={account.id}
-                                            className="group/card relative flex flex-col justify-between bg-slate-900/60 shadow-xl backdrop-blur-xl p-5 border border-slate-800 hover:border-slate-700/60 rounded-2xl transition-all duration-300"
+                                            draggable
+                                            onDragStart={(e) => {
+                                                const target = e.target as HTMLElement;
+                                                if (target.tagName === 'INPUT' || target.tagName === 'BUTTON') {
+                                                    e.preventDefault();
+                                                    return;
+                                                }
+                                                handleDragStart(index);
+                                            }}
+                                            onDragEnter={() => handleDragEnter(index)}
+                                            onDragEnd={handleDragEnd}
+                                            onDragOver={(e) => e.preventDefault()}
+                                            onDrop={() => handleDrop(index)}
+                                            className={`group/card relative flex flex-col justify-between bg-slate-900/60 shadow-xl backdrop-blur-xl p-5 border rounded-2xl transition-all duration-300 ${dragOverIndex === index ? 'border-teal-500 scale-[1.02] bg-slate-800/80 z-20' : 'border-slate-800 hover:border-slate-700/60'
+                                                } ${draggedIndex === index ? 'opacity-40 border-dashed border-slate-700' : ''}`}
                                         >
                                             <div>
                                                 {/* Tab Identity Header */}
@@ -341,13 +455,14 @@ function App() {
                                                         type="button"
                                                         onClick={() => handleDeleteAccount(account.id, account.name)}
                                                         title="Remove this tab"
-                                                        className="hover:bg-rose-500/10 p-1 rounded-lg text-slate-600 hover:text-rose-400 transition-all duration-200 cursor-pointer"
+                                                        className="hover:bg-rose-500/10 p-1.5 rounded-lg text-slate-600 hover:text-rose-400 transition-all duration-200 cursor-pointer"
                                                     >
-                                                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
                                                             <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
                                                             <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
                                                         </svg>
                                                     </button>
+
                                                 </div>
 
                                                 {/* Isolated Live Current Balance Counter */}
