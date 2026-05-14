@@ -6,6 +6,13 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
+import {
+    Landmark, Wallet, CreditCard, Shield, TrendingUp, Coins, Gem, BadgeDollarSign,
+    Plus, Minus, Trash2, GripHorizontal, X, ArrowUpRight, ArrowDownRight, Activity, LayoutDashboard, History
+} from 'lucide-react';
+import {
+    BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell
+} from 'recharts';
 
 // -----------------------------------------------------------------------------
 // CORE DATA INTERFACES
@@ -31,8 +38,22 @@ type Transaction = {
     category: string;
 };
 
-// Preset emoji icons offered during creation of new tracking tabs
-const PRESET_ICONS = ['🏦', '💵', '💳', '🛡️', '📈', '🪙', '💎', '💰'];
+// Preset icon identifiers mapping to Lucide components
+const PRESET_ICONS = ['bank', 'wallet', 'card', 'shield', 'trend', 'coins', 'gem', 'dollar'];
+
+const getIconComponent = (iconStr: string) => {
+    switch (iconStr) {
+        case '🏦': case 'bank': return Landmark;
+        case '💵': case 'wallet': return Wallet;
+        case '💳': case 'card': return CreditCard;
+        case '🛡️': case 'shield': return Shield;
+        case '📈': case 'trend': return TrendingUp;
+        case '🪙': case 'coins': return Coins;
+        case '💎': case 'gem': return Gem;
+        case '💰': case 'dollar': return BadgeDollarSign;
+        default: return Wallet;
+    }
+};
 
 function App() {
     // -------------------------------------------------------------------------
@@ -48,7 +69,7 @@ function App() {
     // Creation modal/form inputs for spinning up a separate new place tab
     const [newAccName, setNewAccName] = useState('');
     const [newAccBalance, setNewAccBalance] = useState('');
-    const [newAccIcon, setNewAccIcon] = useState('🏦');
+    const [newAccIcon, setNewAccIcon] = useState('bank');
     const [isCreatingAcc, setIsCreatingAcc] = useState(false);
 
     // Isolated inline text inputs tracking the pending add/subtract amount per tab ID
@@ -64,6 +85,9 @@ function App() {
     const [dragOverGroupIndex, setDragOverGroupIndex] = useState<number | null>(null);
     const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null);
     const [layout, setLayout] = useState<number[][]>([]);
+
+    // UI toggles
+    const [isLedgerOpen, setIsLedgerOpen] = useState(false);
 
     // -------------------------------------------------------------------------
     // DATA FETCHING & SYNCHRONIZATION
@@ -367,7 +391,7 @@ function App() {
     // -------------------------------------------------------------------------
 
     return (
-        <div 
+        <div
             className="flex flex-col items-center bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] bg-slate-950 selection:bg-teal-500 from-slate-900 via-slate-950 to-black p-4 md:p-8 min-h-screen font-sans text-slate-100 selection:text-slate-950"
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDropOutside}
@@ -384,63 +408,87 @@ function App() {
             <div className="space-y-8 mx-auto w-full max-w-5xl">
 
                 {/* Hero Header Section */}
-                <header className="flex md:flex-row flex-col justify-between md:items-center gap-4 pb-4 border-slate-800/80 border-b">
-                    <div className="flex items-center gap-3.5">
-                        <div className="flex justify-center items-center bg-linear-to-tr from-emerald-500 to-teal-400 shadow-emerald-500/20 shadow-lg rounded-xl w-11 h-11 font-bold text-slate-950 text-xl">
-                            💼
+                <header className="flex md:flex-row flex-col justify-between md:items-center gap-4 pb-6 border-slate-800/50 border-b">
+                    <div className="flex items-center gap-4">
+                        <div className="flex justify-center items-center bg-slate-900 shadow-[inset_-2px_-2px_6px_rgba(255,255,255,0.02),inset_2px_2px_6px_rgba(0,0,0,0.5)] border border-slate-800/50 rounded-2xl w-14 h-14 font-bold text-slate-950 text-2xl">
+                            <Activity className="w-7 h-7 text-teal-400" />
                         </div>
                         <div>
-                            <h1 className="bg-clip-text bg-linear-to-r from-white via-slate-200 to-slate-400 font-bold text-transparent text-xl md:text-2xl tracking-tight">
-                                Money Tabs GUI
+                            <h1 className="bg-clip-text bg-linear-to-r from-white via-slate-200 to-slate-400 font-extrabold text-transparent text-2xl md:text-3xl tracking-tight">
+                                Money Tabs
                             </h1>
-                            <p className="mt-0.5 font-medium text-slate-400 text-xs">
-                                Separate places tracking GUI &bull; Add or subtract money as you go
+                            <p className="mt-1 font-medium text-slate-400 text-sm">
+                                Track, merge, and organize your wealth.
                             </p>
                         </div>
                     </div>
 
-                    {/* Fast live summary statistics */}
-                    <div className="flex items-center gap-3 bg-slate-900/80 px-4 py-2 border border-slate-800 rounded-xl">
-                        <div className="bg-emerald-400 rounded-full w-2 h-2 animate-pulse"></div>
-                        <span className="font-medium text-slate-400 text-xs">
-                            Active Tabs: <strong className="text-slate-200">{accounts.length}</strong>
-                        </span>
+                    {/* Header Controls */}
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 bg-slate-900/80 shadow-sm px-4 py-2 border border-slate-800/60 rounded-xl">
+                            <div className="bg-emerald-400 rounded-full w-2 h-2 animate-pulse"></div>
+                            <span className="font-medium text-slate-400 text-sm">
+                                Active Tabs: <strong className="text-slate-200">{accounts.length}</strong>
+                            </span>
+                        </div>
+                        <button
+                            onClick={() => setIsLedgerOpen(true)}
+                            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 border border-slate-700/50 rounded-xl font-medium text-slate-200 text-sm transition-colors"
+                        >
+                            <History className="w-4 h-4" />
+                            Ledger
+                        </button>
                     </div>
                 </header>
 
                 {/* Global Error Notice Indicator */}
                 {errorMsg && (
-                    <div className="flex items-center gap-2.5 bg-rose-500/10 shadow-lg p-4 border border-rose-500/20 rounded-xl text-rose-400 text-xs animate-fade-in">
-                        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                        </svg>
+                    <div className="flex items-center gap-2.5 bg-rose-500/10 shadow-lg p-4 border border-rose-500/20 rounded-xl text-rose-400 text-sm animate-fade-in">
+                        <X className="w-5 h-5 shrink-0" />
                         <span className="font-medium">{errorMsg}</span>
                     </div>
                 )}
 
                 {/* ========================================================================= */}
-                {/* TOTAL BALANCE HERO BANNER */}
+                {/* TOTAL BALANCE HERO BANNER W/ CHART */}
                 {/* ========================================================================= */}
-                <div className="group relative bg-linear-to-br from-slate-900 via-slate-900 to-slate-950 shadow-2xl shadow-black/60 p-6 md:p-8 border border-slate-800 rounded-2xl overflow-hidden">
-                    <div className="-top-20 -right-20 absolute bg-emerald-500/10 group-hover:bg-emerald-500/15 blur-3xl rounded-full w-60 h-60 transition-all duration-500 pointer-events-none"></div>
-                    <div className="-bottom-20 -left-20 absolute bg-teal-500/5 blur-3xl rounded-full w-60 h-60 pointer-events-none"></div>
+                <div className="group relative bg-[#151b2b] shadow-[-10px_-10px_20px_rgba(255,255,255,0.02),10px_10px_20px_rgba(0,0,0,0.4)] p-6 md:p-8 border border-slate-800/40 rounded-4xl overflow-hidden">
+                    <div className="-top-32 -right-32 absolute bg-emerald-500/10 group-hover:bg-emerald-500/15 blur-[100px] rounded-full w-96 h-96 transition-all duration-700 pointer-events-none"></div>
+                    <div className="-bottom-32 -left-32 absolute bg-teal-500/10 blur-[100px] rounded-full w-96 h-96 pointer-events-none"></div>
 
-                    <div className="z-10 relative flex md:flex-row flex-col justify-between md:items-center gap-4">
-                        <div>
-                            <div className="flex items-center gap-2 mb-1 font-medium text-slate-400 text-sm">
-                                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
+                    <div className="z-10 relative flex md:flex-row flex-col justify-between items-center gap-8">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2 font-medium text-slate-400 text-sm uppercase tracking-wide">
+                                <LayoutDashboard className="w-4 h-4 text-emerald-400" />
                                 <span>Overall Combined Total</span>
                             </div>
-                            <div className={`text-4xl md:text-5xl font-extrabold tracking-tight transition-all duration-300 ${totalBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            <div className={`text-5xl md:text-6xl font-extrabold tracking-tight transition-all duration-300 ${totalBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                 ₹{totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
+                            <p className="mt-4 max-w-sm text-slate-400 text-sm leading-relaxed">
+                                Keep tabs on different physical or digital places where your money lives. Use the modules below to instantly add gains or spendings separately per source.
+                            </p>
                         </div>
 
-                        <div className="bg-slate-950/60 p-4 border border-slate-800/80 rounded-xl max-w-xs text-slate-400 text-xs leading-relaxed">
-                            💡 <strong>Workflow Notes:</strong> Keep tabs on different physical or digital places where your money lives. Use the modules below to instantly add gains or spendings separately per source.
-                        </div>
+                        {accounts.length > 0 && (
+                            <div className="flex-1 w-full h-[180px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={accounts.map(a => ({ name: a.name, value: Math.max(0, a.balance) }))}>
+                                        <XAxis dataKey="name" hide />
+                                        <Tooltip
+                                            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
+                                            itemStyle={{ color: '#34d399', fontWeight: 'bold' }}
+                                        />
+                                        <Bar dataKey="value" radius={[6, 6, 6, 6]}>
+                                            {accounts.map((_, index) => (
+                                                <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#34d399' : '#14b8a6'} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -469,7 +517,7 @@ function App() {
                                 </p>
                             </div>
                         ) : (
-                            <div className="gap-6 grid grid-cols-1 md:grid-cols-2">
+                            <div className="flex flex-col gap-8 w-full">
                                 {layout.map((group, groupIndex) => {
                                     const groupAccounts = group.map(id => accounts.find(a => a.id === id)).filter(Boolean) as Account[];
                                     if (groupAccounts.length === 0) return null;
@@ -478,7 +526,7 @@ function App() {
                                     return (
                                         <div
                                             key={`group-${groupIndex}`}
-                                            className={`relative flex flex-col transition-all duration-300 ${dragOverGroupIndex === groupIndex && dragOverTabIndex === null ? 'ring-2 ring-teal-500 rounded-2xl bg-slate-800/20 z-20 scale-[1.02]' : ''}`}
+                                            className={`relative flex flex-col transition-all duration-500 rounded-4xl ${groupAccounts.length > 1 ? 'p-6 md:p-8 bg-[#151b2b] shadow-[-8px_-8px_16px_rgba(255,255,255,0.02),8px_8px_16px_rgba(0,0,0,0.5)] border border-slate-800/40' : ''} ${dragOverGroupIndex === groupIndex && dragOverTabIndex === null ? 'ring-2 ring-teal-500 scale-[1.01] bg-slate-800/20' : ''}`}
                                             onDragEnter={(e) => {
                                                 e.stopPropagation();
                                                 handleDragEnter(groupIndex);
@@ -493,22 +541,26 @@ function App() {
                                             }}
                                         >
                                             {groupAccounts.length > 1 && (
-                                                <div className="z-10 relative flex justify-between items-center bg-slate-800/90 px-4 py-3 border border-slate-700 border-b-0 rounded-t-2xl font-bold text-slate-300 text-sm">
-                                                    <span className="flex items-center gap-2">
-                                                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                                                <div className="flex justify-between items-center mb-6 px-2">
+                                                    <div className="flex items-center gap-3 font-bold text-slate-400 text-sm uppercase tracking-wider">
+                                                        <GripHorizontal className="w-5 h-5 text-slate-500" />
                                                         Merged Group Total
-                                                    </span>
-                                                    <span className={groupTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                                                    </div>
+                                                    <div className={`text-2xl font-black tracking-tight ${groupTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                         ₹{groupTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                    </span>
+                                                    </div>
                                                 </div>
                                             )}
-                                            <div className={`flex flex-col h-full ${groupAccounts.length > 1 ? 'border border-slate-700 rounded-b-2xl rounded-t-none overflow-hidden shadow-xl' : ''}`}>
+
+                                            <div className="gap-6 grid grid-cols-1 md:grid-cols-2 w-full">
                                                 {groupAccounts.map((account, tabIndex) => {
                                                     const isAdjusting = adjustingId === account.id;
                                                     const amountVal = adjustAmounts[account.id] || '';
                                                     const noteVal = adjustNotes[account.id] || '';
                                                     const isDragged = draggedItem?.gIdx === groupIndex && draggedItem?.tIdx === tabIndex;
+
+                                                    const IconCmp = getIconComponent(account.icon);
+                                                    const isOddAndLast = (groupAccounts.length % 2 !== 0 && tabIndex === groupAccounts.length - 1);
 
                                                     return (
                                                         <div
@@ -535,30 +587,30 @@ function App() {
                                                                 e.stopPropagation();
                                                                 handleDrop(groupIndex, tabIndex);
                                                             }}
-                                                            className={`group/card relative flex flex-col justify-between bg-slate-900/60 backdrop-blur-xl p-5 border transition-all duration-300 h-full
-                                                                ${groupAccounts.length === 1 ? 'border-slate-800 rounded-2xl hover:border-slate-700/60 shadow-xl' : 'border-t-0 border-x-0 border-b-slate-800 last:border-b-0 rounded-none bg-slate-900/40 hover:bg-slate-800/60'}
-                                                                ${isDragged ? 'opacity-40 border-dashed border-slate-700' : ''}
-                                                                ${dragOverGroupIndex === groupIndex && dragOverTabIndex === tabIndex ? 'bg-slate-800/80 ring-1 ring-teal-500' : ''}`}
+                                                            className={`relative flex flex-col justify-between p-6 transition-all duration-300 
+                                                                bg-[#1a2035] shadow-[inset_-4px_-4px_8px_rgba(255,255,255,0.01),inset_4px_4px_8px_rgba(0,0,0,0.3)] 
+                                                                rounded-3xl border border-slate-800/60
+                                                                ${isOddAndLast && groupAccounts.length > 1 ? 'md:col-span-2' : 'col-span-1'}
+                                                                ${isDragged ? 'opacity-40 border-dashed border-slate-600 scale-95' : 'hover:shadow-[inset_-2px_-2px_4px_rgba(255,255,255,0.02),inset_2px_2px_4px_rgba(0,0,0,0.5)] hover:-translate-y-1'}
+                                                                ${dragOverGroupIndex === groupIndex && dragOverTabIndex === tabIndex ? 'ring-2 ring-teal-500 bg-slate-800/40' : ''}`}
                                                         >
                                                             <div>
                                                                 {/* Tab Identity Header */}
-                                                                <div className="flex justify-between items-start gap-3 mb-4">
-                                                                    <div className="flex items-center gap-3 min-w-0">
-                                                                        <div className="mr-1 text-slate-600 cursor-grab">
-                                                                            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                                                                                <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                                                                            </svg>
+                                                                <div className="flex justify-between items-start gap-3 mb-6">
+                                                                    <div className="flex items-center gap-4 min-w-0">
+                                                                        <div className="mr-1 text-slate-600 hover:text-teal-400 transition-colors cursor-grab">
+                                                                            <GripHorizontal className="w-5 h-5" />
                                                                         </div>
 
-                                                                        <div className="flex justify-center items-center bg-slate-950 shadow-inner border border-slate-800 rounded-xl w-10 h-10 text-lg cursor-grab shrink-0">
-                                                                            {account.icon || '💳'}
+                                                                        <div className="flex justify-center items-center bg-slate-900 shadow-[inset_-2px_-2px_4px_rgba(255,255,255,0.02),inset_2px_2px_4px_rgba(0,0,0,0.5)] border border-slate-800/50 rounded-2xl w-12 h-12 text-teal-400 shrink-0">
+                                                                            <IconCmp className="w-6 h-6" />
                                                                         </div>
                                                                         <div className="min-w-0 cursor-grab">
-                                                                            <h3 className="font-bold text-slate-200 group-hover/card:text-white text-base truncate transition-colors">
+                                                                            <h3 className="font-bold text-slate-200 group-hover/card:text-white text-lg truncate transition-colors">
                                                                                 {account.name}
                                                                             </h3>
-                                                                            <span className="font-semibold text-[10px] text-slate-500 uppercase tracking-wider">
-                                                                                Separate Money Tab
+                                                                            <span className="font-semibold text-[10px] text-slate-500 uppercase tracking-widest">
+                                                                                Money Tab
                                                                             </span>
                                                                         </div>
                                                                     </div>
@@ -568,40 +620,37 @@ function App() {
                                                                         type="button"
                                                                         onClick={() => handleDeleteAccount(account.id, account.name)}
                                                                         title="Remove this tab"
-                                                                        className="hover:bg-rose-500/10 p-1.5 rounded-lg text-slate-600 hover:text-rose-400 transition-all duration-200 cursor-pointer"
+                                                                        className="hover:bg-rose-500/10 p-2 rounded-xl text-slate-600 hover:text-rose-400 transition-all duration-200 cursor-pointer"
                                                                     >
-                                                                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                                                                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
-                                                                            <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
-                                                                        </svg>
+                                                                        <Trash2 className="w-4 h-4" />
                                                                     </button>
 
                                                                 </div>
 
                                                                 {/* Isolated Live Current Balance Counter */}
-                                                                <div className="bg-slate-950/60 mb-4.5 p-3.5 border border-slate-800/60 rounded-xl">
-                                                                    <div className="mb-0.5 font-medium text-slate-500 text-xs">Current Balance</div>
-                                                                    <div className={`text-2xl font-extrabold tracking-tight ${account.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                <div className="bg-slate-900/50 mb-6 p-4 border border-slate-800/40 rounded-2xl">
+                                                                    <div className="mb-1 font-medium text-slate-500 text-xs uppercase tracking-wide">Current Balance</div>
+                                                                    <div className={`text-3xl font-extrabold tracking-tight ${account.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                                         ₹{account.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                     </div>
                                                                 </div>
 
                                                                 {/* Dynamic Form Controls: Add or Subtract immediately */}
-                                                                <div className="space-y-2.5">
-                                                                    <div className="flex items-center gap-1.5 font-semibold text-[11px] text-slate-400">
-                                                                        <span>⚡ Quick Add / Subtract</span>
+                                                                <div className="space-y-3">
+                                                                    <div className="flex items-center gap-2 font-bold text-[11px] text-slate-500 uppercase tracking-widest">
+                                                                        <span>Quick Action</span>
                                                                     </div>
 
-                                                                    <div className="gap-2 grid grid-cols-2">
+                                                                    <div className="gap-3 grid grid-cols-2">
                                                                         <div className="relative col-span-2 sm:col-span-1">
-                                                                            <span className="top-1/2 left-3 absolute font-bold text-slate-600 text-xs -translate-y-1/2">₹</span>
+                                                                            <span className="top-1/2 left-4 absolute font-bold text-slate-500 text-sm -translate-y-1/2">₹</span>
                                                                             <input
                                                                                 type="number"
                                                                                 step="any"
                                                                                 placeholder="Amount"
                                                                                 value={amountVal}
                                                                                 onChange={(e) => setAdjustAmounts({ ...adjustAmounts, [account.id]: e.target.value })}
-                                                                                className="bg-slate-950 py-1.5 pr-2.5 pl-7 border border-slate-800 focus:border-teal-500 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 w-full text-slate-200 text-xs transition-all [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder-slate-600 [appearance:textfield]"
+                                                                                className="bg-slate-900/80 py-2.5 pr-3 pl-8 border border-slate-800 focus:border-teal-500 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 w-full font-medium text-slate-200 text-sm transition-all [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder-slate-600 [appearance:textfield]"
                                                                             />
                                                                         </div>
 
@@ -611,20 +660,20 @@ function App() {
                                                                                 placeholder="Note (optional)"
                                                                                 value={noteVal}
                                                                                 onChange={(e) => setAdjustNotes({ ...adjustNotes, [account.id]: e.target.value })}
-                                                                                className="bg-slate-950 px-2.5 py-1.5 border border-slate-800 focus:border-teal-500 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 w-full text-slate-200 text-xs transition-all placeholder-slate-600"
+                                                                                className="bg-slate-900/80 px-3 py-2.5 border border-slate-800 focus:border-teal-500 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 w-full font-medium text-slate-200 text-sm transition-all placeholder-slate-600"
                                                                             />
                                                                         </div>
                                                                     </div>
 
                                                                     {/* Split Dedicated Inline Trigger Buttons */}
-                                                                    <div className="gap-2 grid grid-cols-2 pt-1">
+                                                                    <div className="gap-3 grid grid-cols-2 pt-2">
                                                                         <button
                                                                             type="button"
                                                                             disabled={isAdjusting}
                                                                             onClick={() => handleAdjustBalance(account.id, true)}
-                                                                            className="flex justify-center items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 px-2 py-1.5 border border-emerald-500/20 hover:border-emerald-500/40 rounded-lg font-semibold text-emerald-400 text-xs active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
+                                                                            className="flex justify-center items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 px-3 py-2.5 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl font-bold text-emerald-400 text-sm active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
                                                                         >
-                                                                            <span className="text-base leading-none">+</span>
+                                                                            <Plus className="w-4 h-4" />
                                                                             <span>Add</span>
                                                                         </button>
 
@@ -632,9 +681,9 @@ function App() {
                                                                             type="button"
                                                                             disabled={isAdjusting}
                                                                             onClick={() => handleAdjustBalance(account.id, false)}
-                                                                            className="flex justify-center items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 px-2 py-1.5 border border-rose-500/20 hover:border-rose-500/40 rounded-lg font-semibold text-rose-400 text-xs active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
+                                                                            className="flex justify-center items-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 px-3 py-2.5 border border-rose-500/20 hover:border-rose-500/40 rounded-xl font-bold text-rose-400 text-sm active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
                                                                         >
-                                                                            <span className="text-base leading-none">&minus;</span>
+                                                                            <Minus className="w-4 h-4" />
                                                                             <span>Spend</span>
                                                                         </button>
                                                                     </div>
@@ -650,140 +699,156 @@ function App() {
                             </div>
                         )}
 
-                        {/* Secondary Panel Modules: Tab Instantiation and Historic Activity Ledger */}
-                        <div className="items-start gap-6 grid grid-cols-1 lg:grid-cols-12 pt-2">
+                        {/* Place Module Creator Panel */}
+                        <div className="bg-[#151b2b] shadow-[inset_-4px_-4px_8px_rgba(255,255,255,0.01),inset_4px_4px_8px_rgba(0,0,0,0.3)] mx-auto mt-8 p-6 md:p-8 border border-slate-800/60 rounded-4xl w-full max-w-3xl">
+                            <h3 className="flex items-center gap-3 mb-6 font-bold text-slate-200 text-lg">
+                                <Plus className="w-5 h-5 text-teal-400" />
+                                Add New Place Tab
+                            </h3>
 
-                            {/* Place Module Creator Panel */}
-                            <div className="lg:col-span-5 bg-slate-900/60 shadow-xl backdrop-blur-xl p-5 border border-slate-800/80 rounded-2xl">
-                                <h3 className="flex items-center gap-2 mb-3 font-bold text-slate-200 text-sm">
-                                    <svg className="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                    </svg>
-                                    Add New Place Tab
-                                </h3>
-
-                                <form onSubmit={handleCreateAccount} className="space-y-3">
+                            <form onSubmit={handleCreateAccount} className="space-y-5">
+                                <div className="gap-5 grid grid-cols-1 md:grid-cols-2">
                                     <div>
-                                        <label className="block mb-1 font-medium text-[11px] text-slate-400">Place / Account Name</label>
+                                        <label className="block mb-2 font-medium text-[11px] text-slate-500 uppercase tracking-wider">Place / Account Name</label>
                                         <input
                                             type="text"
                                             placeholder="e.g., Hidden Wallet, Stock Port"
                                             value={newAccName}
                                             onChange={(e) => setNewAccName(e.target.value)}
-                                            className="bg-slate-950 px-3 py-2 border border-slate-800 focus:border-teal-500 rounded-xl focus:outline-none w-full text-slate-200 text-xs transition-all placeholder-slate-600"
+                                            className="bg-slate-900 px-4 py-3 border border-slate-800 focus:border-teal-500 rounded-xl focus:outline-none w-full text-slate-200 text-sm transition-all placeholder-slate-600"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="block mb-1 font-medium text-[11px] text-slate-400">Starting Balance (₹)</label>
+                                        <label className="block mb-2 font-medium text-[11px] text-slate-500 uppercase tracking-wider">Starting Balance (₹)</label>
                                         <input
                                             type="number"
                                             step="any"
                                             placeholder="0.00"
                                             value={newAccBalance}
                                             onChange={(e) => setNewAccBalance(e.target.value)}
-                                            className="bg-slate-950 px-3 py-2 border border-slate-800 focus:border-teal-500 rounded-xl focus:outline-none w-full text-slate-200 text-xs transition-all [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder-slate-600 [appearance:textfield]"
+                                            className="bg-slate-900 px-4 py-3 border border-slate-800 focus:border-teal-500 rounded-xl focus:outline-none w-full text-slate-200 text-sm transition-all [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder-slate-600 [appearance:textfield]"
                                         />
                                     </div>
-
-                                    <div>
-                                        <label className="block mb-1.5 font-medium text-[11px] text-slate-400">Select Tab Icon</label>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {PRESET_ICONS.map((icon) => (
-                                                <button
-                                                    key={icon}
-                                                    type="button"
-                                                    onClick={() => setNewAccIcon(icon)}
-                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm border transition-all cursor-pointer ${newAccIcon === icon
-                                                        ? 'bg-teal-500/20 border-teal-500 text-white scale-110'
-                                                        : 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-400'
-                                                        }`}
-                                                >
-                                                    {icon}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        type="submit"
-                                        disabled={isCreatingAcc}
-                                        className="bg-linear-to-r from-emerald-500 hover:from-emerald-400 to-teal-600 hover:to-teal-500 disabled:opacity-50 shadow-md mt-2 px-3 py-2 rounded-xl w-full font-bold text-slate-950 text-xs active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
-                                    >
-                                        {isCreatingAcc ? 'Creating Tab...' : 'Create Separate Tab'}
-                                    </button>
-                                </form>
-                            </div>
-
-                            {/* Consolidated Trace Ledger List */}
-                            <div className="flex flex-col lg:col-span-7 bg-slate-900/60 shadow-xl backdrop-blur-xl p-5 border border-slate-800/80 rounded-2xl min-h-[260px]">
-                                <div className="flex justify-between items-center mb-3">
-                                    <h3 className="flex items-center gap-2 font-bold text-slate-200 text-sm">
-                                        <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                                        </svg>
-                                        Audit History Ledger
-                                    </h3>
-                                    <span className="bg-slate-800 px-2 py-0.5 border border-slate-700/60 rounded-full font-semibold text-[10px] text-slate-400">
-                                        {transactions.length} recorded
-                                    </span>
                                 </div>
 
-                                {transactions.length === 0 ? (
-                                    <div className="flex flex-col flex-1 justify-center items-center py-8 text-slate-500 text-center">
-                                        <p className="font-medium text-xs">No actions tracked yet</p>
-                                        <p className="mt-1 max-w-xs text-[10px] text-slate-600">
-                                            Use the Quick Add/Spend controls on any place card above to leave audit trace records.
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="flex-1 space-y-2 [&::-webkit-scrollbar-thumb]:bg-slate-800 [&::-webkit-scrollbar-thumb]:hover:bg-slate-700 [&::-webkit-scrollbar-track]:bg-slate-950/40 pr-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar]:w-1.5 max-h-[220px] overflow-y-auto">
-                                        {transactions.map((tx) => {
-                                            const isGain = tx.amount >= 0;
+                                <div>
+                                    <label className="block mb-3 font-medium text-[11px] text-slate-500 uppercase tracking-wider">Select Tab Icon</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {PRESET_ICONS.map((iconName) => {
+                                            const IconComponent = getIconComponent(iconName);
                                             return (
-                                                <div
-                                                    key={tx.id}
-                                                    className="group flex justify-between items-center bg-slate-950/40 hover:bg-slate-800/40 p-2.5 border border-slate-800/40 hover:border-slate-700/50 rounded-xl text-xs transition-all"
+                                                <button
+                                                    key={iconName}
+                                                    type="button"
+                                                    onClick={() => setNewAccIcon(iconName)}
+                                                    className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all cursor-pointer ${newAccIcon === iconName
+                                                        ? 'bg-teal-500/20 border-2 border-teal-500 text-teal-400 scale-110 shadow-lg shadow-teal-500/20'
+                                                        : 'bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-500 hover:text-slate-300'
+                                                        }`}
                                                 >
-                                                    <div className="flex-1 mr-2 min-w-0">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="font-semibold text-slate-200 truncate">
-                                                                {tx.title}
-                                                            </span>
-                                                        </div>
-                                                        <span className="block mt-0.5 font-medium text-[10px] text-slate-500">
-                                                            Tab: <strong className="text-slate-400">{tx.category || 'General'}</strong>
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-2 shrink-0">
-                                                        <span className={`font-bold tracking-tight ${isGain ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                            {isGain ? '+' : ''}₹{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                        </span>
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDeleteTransaction(tx.id)}
-                                                            title="Revert adjustment trace"
-                                                            className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-600 hover:text-rose-400 transition-all cursor-pointer"
-                                                        >
-                                                            <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
-                                                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                    <IconComponent className="w-5 h-5" />
+                                                </button>
                                             );
                                         })}
                                     </div>
-                                )}
-                            </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={isCreatingAcc}
+                                    className="bg-linear-to-r from-emerald-500 hover:from-emerald-400 to-teal-600 hover:to-teal-500 disabled:opacity-50 shadow-lg shadow-teal-500/20 mt-4 px-4 py-3 rounded-xl w-full font-bold text-slate-950 text-sm active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
+                                >
+                                    {isCreatingAcc ? 'Creating Tab...' : 'Create Separate Tab'}
+                                </button>
+                            </form>
                         </div>
                     </>
                 )}
-
             </div>
+
+            {/* Sidebar Ledger Overlay */}
+            {/* Backdrop */}
+            <div
+                className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300 ${isLedgerOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                onClick={() => setIsLedgerOpen(false)}
+            />
+            {/* Drawer */}
+            <div className={`fixed inset-y-0 right-0 z-50 w-full sm:w-[400px] bg-slate-900/95 backdrop-blur-3xl shadow-2xl border-l border-slate-800/80 transform transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col ${isLedgerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div className="flex justify-between items-center p-6 border-slate-800/50 border-b">
+                    <h3 className="flex items-center gap-2 font-bold text-slate-200 text-lg">
+                        <History className="w-5 h-5 text-indigo-400" />
+                        Audit History Ledger
+                    </h3>
+                    <button
+                        onClick={() => setIsLedgerOpen(false)}
+                        className="hover:bg-slate-800 p-2 rounded-xl text-slate-400 hover:text-white transition-colors"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="bg-slate-900/50 px-6 py-4 border-slate-800/30 border-b">
+                    <span className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 border border-slate-700/60 rounded-lg w-max font-semibold text-slate-400 text-xs">
+                        <Activity className="w-3.5 h-3.5" />
+                        {transactions.length} Activity Records
+                    </span>
+                </div>
+
+                {transactions.length === 0 ? (
+                    <div className="flex flex-col flex-1 justify-center items-center p-8 text-slate-500 text-center">
+                        <div className="bg-slate-800/50 mb-4 p-4 rounded-full">
+                            <History className="w-8 h-8 text-slate-600" />
+                        </div>
+                        <p className="font-bold text-slate-400 text-sm">No actions tracked yet</p>
+                        <p className="mt-2 max-w-[250px] text-slate-500 text-xs leading-relaxed">
+                            Use the Quick Add/Spend controls on any place card to leave audit trace records.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="flex-1 space-y-3 [&::-webkit-scrollbar-thumb]:bg-slate-800 [&::-webkit-scrollbar-thumb]:hover:bg-slate-700 [&::-webkit-scrollbar-track]:bg-slate-950/40 p-6 pr-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar]:w-1.5 overflow-y-auto">
+                        {transactions.map((tx) => {
+                            const isGain = tx.amount >= 0;
+                            return (
+                                <div
+                                    key={tx.id}
+                                    className="group flex justify-between items-center bg-slate-800/30 hover:bg-slate-800/60 p-4 border border-slate-800/50 hover:border-slate-700/80 rounded-2xl transition-all"
+                                >
+                                    <div className="flex-1 mr-4 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className={`p-1 rounded-md ${isGain ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                                {isGain ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                                            </div>
+                                            <span className="font-bold text-slate-200 text-sm truncate">
+                                                {tx.title}
+                                            </span>
+                                        </div>
+                                        <span className="block pl-7 font-medium text-slate-500 text-xs">
+                                            Tab: <strong className="text-slate-400">{tx.category || 'General'}</strong>
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <span className={`font-black tracking-tight text-sm ${isGain ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {isGain ? '+' : ''}₹{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteTransaction(tx.id)}
+                                            title="Revert adjustment trace"
+                                            className="hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-500 hover:text-rose-400 transition-all cursor-pointer"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
         </div>
     );
 }
