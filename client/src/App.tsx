@@ -11,6 +11,7 @@ import { HeroBanner } from './components/HeroBanner';
 import { CreateAccountForm } from './components/CreateAccountForm';
 import { LedgerSidebar } from './components/LedgerSidebar';
 import { AccountCard } from './components/AccountCard';
+import { EditAccountModal } from './components/EditAccountModal';
 import type { Account, Transaction } from './types';
 // -----------------------------------------------------------------------------
 // CORE DATA INTERFACES
@@ -50,6 +51,10 @@ function App() {
 
     // UI toggles
     const [isLedgerOpen, setIsLedgerOpen] = useState(false);
+
+    // Edit account states
+    const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+    const [isEditingModalOpen, setIsEditingModalOpen] = useState(false);
 
     // -------------------------------------------------------------------------
     // DATA FETCHING & SYNCHRONIZATION
@@ -104,6 +109,7 @@ function App() {
 
             setAccounts(fetchedAccs);
             setLayout(finalLayout);
+            localStorage.setItem('finance_tracker_tab_order', JSON.stringify(finalLayout));
             setTransactions(txRes.data);
             setErrorMsg('');
         } catch (err) {
@@ -129,7 +135,7 @@ function App() {
             }
         };
 
-        window.addEventListener('scroll', handleScroll);
+        window.addEventListener('scroll', handleScroll, { passive: true });
         handleScroll();
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
@@ -260,10 +266,29 @@ function App() {
         if (!window.confirm(`Are you sure you want to delete the "${name}" tab?`)) return;
         try {
             await axios.delete(`/api/accounts/${accountId}`);
+            
+            // Clean local storage layout immediately to prevent stale states
+            const newLayout = layout.map(group => group.filter(id => id !== accountId)).filter(group => group.length > 0);
+            setLayout(newLayout);
+            localStorage.setItem('finance_tracker_tab_order', JSON.stringify(newLayout));
+
             await fetchData();
         } catch (err) {
             console.error(err);
             setErrorMsg('Failed to delete place tab.');
+        }
+    };
+
+    /**
+     * Dispatches PUT modifications to rename or change icons on an existing place.
+     */
+    const handleEditAccount = async (accountId: number, name: string, icon: string) => {
+        try {
+            await axios.put(`/api/accounts/${accountId}`, { name, icon });
+            await fetchData();
+        } catch (err: any) {
+            console.error(err);
+            throw err;
         }
     };
 
@@ -353,32 +378,43 @@ function App() {
 
     return (
         <div
-            className="flex flex-col items-center bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] bg-slate-950 selection:bg-teal-500 from-slate-900 via-slate-950 to-black p-4 md:p-8 min-h-screen font-sans text-slate-100 selection:text-slate-950"
+            className="relative flex flex-col items-center bg-neutral-950 selection:bg-emerald-500 selection:text-neutral-950 p-4 md:p-8 min-h-screen font-sans text-neutral-100 overflow-x-hidden"
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDropOutside}
         >
+            {/* Background Ambient Glows for Glassmorphism */}
+            <div className="-top-12 left-1/4 absolute bg-emerald-500/10 blur-[130px] rounded-full w-96 h-96 pointer-events-none"></div>
+            <div className="top-1/3 right-1/4 absolute bg-indigo-500/5 blur-[160px] rounded-full w-96 h-96 pointer-events-none"></div>
+            <div className="bottom-1/4 left-1/3 absolute bg-teal-500/5 blur-[130px] rounded-full w-80 h-80 pointer-events-none"></div>
+
             {/* Premium Fixed Horizontal Scroll Progress Bar */}
-            <div className="top-0 left-0 z-50 fixed bg-slate-900 w-full h-1">
+            <div className="top-0 left-0 z-50 fixed bg-neutral-900/60 backdrop-blur-xs w-full h-1">
                 <div
-                    className="bg-linear-to-r from-indigo-500 to-teal-200 h-full transition-all duration-75 ease-out"
+                    className="bg-linear-to-r from-emerald-500 via-teal-400 to-indigo-500 h-full"
                     style={{ width: `${scrollProgress}%` }}
                 ></div>
             </div>
 
-            <div className="space-y-8 mx-auto w-full max-w-5xl">
+            <div className="z-10 space-y-8 mx-auto w-full max-w-5xl">
                 <Header accountsCount={accounts.length} onOpenLedger={() => setIsLedgerOpen(true)} />
 
                 {errorMsg && (
-                    <div className="flex items-center gap-2.5 bg-rose-500/10 shadow-lg p-4 border border-rose-500/20 rounded-xl text-rose-400 text-sm animate-fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-rose-500/10 backdrop-blur-md shadow-2xl shadow-rose-950/20 p-4 border border-rose-500/15 rounded-2xl text-rose-400 text-sm animate-fade-in w-full">
                         <span className="font-medium">{errorMsg}</span>
+                        <button
+                            onClick={fetchData}
+                            className="bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/10 text-rose-300 font-bold text-xs px-3 py-1.5 rounded-lg active:scale-[0.98] transition-all cursor-pointer w-max shrink-0"
+                        >
+                            Retry Connection
+                        </button>
                     </div>
                 )}
 
                 <HeroBanner accounts={accounts} totalBalance={totalBalance} />
 
                 {isLoading && accounts.length === 0 ? (
-                    <div className="flex flex-col justify-center items-center space-y-3 py-16 text-slate-500">
-                        <svg className="w-8 h-8 text-teal-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <div className="flex flex-col justify-center items-center space-y-3 py-16 text-neutral-500">
+                        <svg className="w-8 h-8 text-emerald-500 animate-spin" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
@@ -387,12 +423,12 @@ function App() {
                 ) : (
                     <>
                         {layout.length === 0 ? (
-                            <div className="flex flex-col justify-center items-center bg-slate-900/40 shadow-inner backdrop-blur-md my-4 p-10 border border-slate-800 border-dashed rounded-2xl text-center">
-                                <div className="flex justify-center items-center bg-slate-950/80 mb-3 border border-slate-800 rounded-full w-14 h-14 text-2xl">
+                            <div className="flex flex-col justify-center items-center bg-neutral-900/10 backdrop-blur-md my-4 p-10 border border-neutral-800 border-dashed rounded-3xl text-center shadow-xl">
+                                <div className="flex justify-center items-center bg-neutral-950/60 mb-3 border border-neutral-800/80 rounded-full w-14 h-14 text-2xl">
                                     📭
                                 </div>
-                                <h3 className="font-bold text-slate-300 text-base">No Separate Money Tabs Found</h3>
-                                <p className="mt-1 max-w-md text-slate-500 text-xs leading-relaxed">
+                                <h3 className="font-bold text-neutral-200 text-base">No Separate Money Tabs Found</h3>
+                                <p className="mt-1 max-w-md text-neutral-500 text-xs leading-relaxed">
                                     Your multi-tabbed layout is currently empty. Use the <strong>"Add New Place Tab"</strong> module below to create discrete places/sources of money (e.g., Main Bank, Wallet Cash) and track them independently.
                                 </p>
                             </div>
@@ -406,7 +442,7 @@ function App() {
                                     return (
                                         <div
                                             key={`group-${groupIndex}`}
-                                            className={`relative flex flex-col transition-all duration-500 rounded-4xl ${groupAccounts.length > 1 ? 'p-6 md:p-8 bg-[#151b2b] shadow-[-8px_-8px_16px_rgba(255,255,255,0.02),8px_8px_16px_rgba(0,0,0,0.5)] border border-slate-800/40' : ''} ${dragOverGroupIndex === groupIndex && dragOverTabIndex === null ? 'ring-2 ring-teal-500 scale-[1.01] bg-slate-800/20' : ''}`}
+                                            className={`relative flex flex-col transition-all duration-500 rounded-4xl ${groupAccounts.length > 1 ? 'p-6 md:p-8 bg-neutral-900/10 backdrop-blur-md shadow-2xl shadow-black/80 border border-neutral-800/50' : ''} ${dragOverGroupIndex === groupIndex && dragOverTabIndex === null ? 'ring-2 ring-emerald-500 scale-[1.01] bg-neutral-800/20' : ''}`}
                                             onDragEnter={(e) => {
                                                 e.stopPropagation();
                                                 handleDragEnter(groupIndex);
@@ -422,7 +458,7 @@ function App() {
                                         >
                                             {groupAccounts.length > 1 && (
                                                 <div className="flex justify-between items-center mb-6 px-2">
-                                                    <div className="flex items-center gap-3 font-bold text-slate-400 text-sm uppercase tracking-wider">
+                                                    <div className="flex items-center gap-3 font-bold text-neutral-400 text-sm uppercase tracking-wider">
                                                         Merged Group Total
                                                     </div>
                                                     <div className={`text-2xl font-black tracking-tight ${groupTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -455,6 +491,10 @@ function App() {
                                                             handleDragEnd={handleDragEnd}
                                                             handleDragEnter={handleDragEnter}
                                                             handleDrop={handleDrop}
+                                                            onEdit={(acc) => {
+                                                                setEditingAccount(acc);
+                                                                setIsEditingModalOpen(true);
+                                                            }}
                                                         />
                                                     );
                                                 })}
@@ -480,6 +520,16 @@ function App() {
                 setIsLedgerOpen={setIsLedgerOpen}
                 transactions={transactions}
                 handleDeleteTransaction={handleDeleteTransaction}
+            />
+
+            <EditAccountModal
+                isOpen={isEditingModalOpen}
+                onClose={() => {
+                    setIsEditingModalOpen(false);
+                    setEditingAccount(null);
+                }}
+                account={editingAccount}
+                onSave={handleEditAccount}
             />
         </div>
     );

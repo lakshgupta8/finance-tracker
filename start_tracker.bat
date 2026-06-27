@@ -24,18 +24,11 @@ cd ..
 
 :: 3. Give the background web servers a few seconds to fully initialize local host bindings
 echo [3/3] Initializing network sockets... Please wait...
-timeout /t 4 /nobreak > nul
+timeout /t 0 /nobreak > nul
 
 :: 4. Automatically open the default web browser pointing directly to the GUI interface
 echo.
 echo Launching default web browser to http://localhost:5173 ...
 start http://localhost:5173
 
-echo.
-echo ===============================================================================
-echo ALL SERVICES ONLINE!
-echo The Finance Tracker servers are running minimized in the background.
-echo To fully exit the application later, simply close those minimized command windows.
-echo ===============================================================================
-echo.
-pause
+exit /b
