@@ -9,7 +9,7 @@ interface HeroBannerProps {
 
 export function HeroBanner({ accounts, totalBalance }: HeroBannerProps) {
     return (
-        <div className="group relative bg-neutral-900/35 backdrop-blur-lg border border-white/[0.04] shadow-2xl p-6 md:p-8 rounded-4xl overflow-hidden">
+        <div className="group relative bg-neutral-900/35 shadow-2xl backdrop-blur-lg p-6 md:p-8 border border-white/4 rounded-4xl overflow-hidden">
             <div className="-top-32 -right-32 absolute bg-emerald-500/15 group-hover:bg-emerald-500/25 blur-[110px] rounded-full w-96 h-96 transition-all duration-700 pointer-events-none"></div>
             <div className="-bottom-32 -left-32 absolute bg-teal-500/10 blur-[110px] rounded-full w-96 h-96 pointer-events-none"></div>
 
