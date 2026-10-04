@@ -3,11 +3,12 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 // https://vite.dev/config/
+// base './' makes the built assets load from file:// (Electron) and from the
+// Capacitor WebView without needing an absolute web root.
 export default defineConfig({
+  base: "./",
   plugins: [react(), tailwindcss()],
-  server: {
-    proxy: {
-      "/api": "http://127.0.0.1:5000",
-    },
+  build: {
+    target: "es2020",
   },
 });

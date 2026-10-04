@@ -1,0 +1,49 @@
+{
+  "name": "money-tabs-desktop",
+  "productName": "Money Tabs",
+  "version": "1.0.0",
+  "description": "Money Tabs - personal finance tracker (Windows desktop)",
+  "main": "main.cjs",
+  "private": true,
+  "author": "Lakshya Gupta",
+  "license": "MIT",
+  "scripts": {
+    "sync": "node scripts/sync-web.mjs",
+    "start": "npm run sync && electron .",
+    "build": "npm run sync && node scripts/build-win.mjs"
+  },
+  "build": {
+    "appId": "com.lakshya.moneytabs",
+    "productName": "Money Tabs",
+    "artifactName": "MoneyTabs-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "dist/**/*"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Money Tabs"
+    },
+    "portable": {
+      "artifactName": "MoneyTabs-Portable.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3"
+  }
+}

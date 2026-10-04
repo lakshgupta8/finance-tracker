@@ -42,7 +42,7 @@ export function EditAccountModal({ isOpen, onClose, account, onSave }: EditAccou
             onClose();
         } catch (err: any) {
             console.error(err);
-            setErrorMsg(err.response?.data?.error || 'Failed to update place tab.');
+            setErrorMsg(err?.message || 'Failed to update place tab.');
         } finally {
             setIsSaving(false);
         }

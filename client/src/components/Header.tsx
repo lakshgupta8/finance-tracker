@@ -1,11 +1,12 @@
-import { Activity, History } from 'lucide-react';
+import { Activity, History, Database } from 'lucide-react';
 
 interface HeaderProps {
     accountsCount: number;
     onOpenLedger: () => void;
+    onOpenSettings: () => void;
 }
 
-export function Header({ accountsCount, onOpenLedger }: HeaderProps) {
+export function Header({ accountsCount, onOpenLedger, onOpenSettings }: HeaderProps) {
     return (
         <header className="flex md:flex-row flex-col justify-between md:items-center gap-4 pb-6 border-neutral-800/50 border-b">
             <div className="flex items-center gap-4">
@@ -23,7 +24,7 @@ export function Header({ accountsCount, onOpenLedger }: HeaderProps) {
             </div>
 
             {/* Header Controls */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-3 bg-neutral-900/40 px-4 py-2 border border-neutral-800/80 backdrop-blur-md rounded-xl shadow-lg shadow-black/30">
                     <div className="bg-emerald-400 rounded-full w-2 h-2 animate-pulse"></div>
                     <span className="font-medium text-neutral-400 text-sm">
@@ -36,6 +37,13 @@ export function Header({ accountsCount, onOpenLedger }: HeaderProps) {
                 >
                     <History className="w-4 h-4" />
                     Ledger
+                </button>
+                <button
+                    onClick={onOpenSettings}
+                    title="Database settings"
+                    className="flex items-center gap-2 bg-neutral-900/60 hover:bg-neutral-800/80 px-3 py-2 border border-neutral-800 backdrop-blur-md rounded-xl font-medium text-neutral-400 hover:text-white text-sm shadow-md transition-all cursor-pointer"
+                >
+                    <Database className="w-4 h-4" />
                 </button>
             </div>
         </header>

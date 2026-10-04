@@ -1,0 +1,16 @@
+node_modules/
+dist/
+release/
+*.log
+.env
+.env.local
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+
+# Personal / secret files kept only on this machine
+.vscode/
+seed/*.db
+mobile/keystore/
+mobile/android/keystore.properties

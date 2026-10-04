@@ -2,28 +2,34 @@
  * FINANCE TRACKER GUI LAYER
  * Separate Places/Tabs tracking application built with React, TypeScript, & Tailwind.
  * Mirrors physical note-taking tabs to easily add or subtract money per location.
+ * Runs identically inside the Windows (Electron) and Android (Capacitor) shells
+ * and talks straight to one shared hosted database.
  * ============================================================================= */
 
-import React, { useEffect, useState, useRef } from 'react';
-import axios from 'axios';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { CreateAccountForm } from './components/CreateAccountForm';
 import { LedgerSidebar } from './components/LedgerSidebar';
 import { AccountCard } from './components/AccountCard';
 import { EditAccountModal } from './components/EditAccountModal';
+import { ConnectDatabase } from './components/ConnectDatabase';
 import type { Account, Transaction } from './types';
-// -----------------------------------------------------------------------------
-// CORE DATA INTERFACES
-// -----------------------------------------------------------------------------
+import * as db from './lib/db';
+import { loadDbConfig, saveDbConfig, clearDbConfig, type DbConfig } from './lib/config';
 
+const LAYOUT_STORAGE_KEY = 'finance_tracker_tab_order';
 
 function App() {
     // -------------------------------------------------------------------------
     // COMPONENT STATE LOGIC
     // -------------------------------------------------------------------------
 
-    // Persistent storage records retrieved from backend API
+    // Hosted database connection (null => show the connect screen)
+    const [dbConfig, setDbConfig] = useState<DbConfig | null>(() => loadDbConfig());
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+    // Persistent storage records retrieved from the shared database
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -61,31 +67,44 @@ function App() {
     // -------------------------------------------------------------------------
 
     /**
-     * Executes concurrent network calls to pull updated balances and trace history.
+     * Persists the tab grouping/order both locally (instant) and in the shared
+     * database (so every device sees the same arrangement).
      */
-    const fetchData = async () => {
+    const persistLayout = (newLayout: number[][]) => {
+        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(newLayout));
+        db.saveLayout(newLayout).catch(err => console.error('Failed to sync layout', err));
+    };
+
+    /**
+     * Executes concurrent queries to pull updated balances, trace history and layout.
+     */
+    const fetchData = useCallback(async () => {
         try {
             setIsLoading(true);
-            const [accRes, txRes] = await axios.all([
-                axios.get('/api/accounts'),
-                axios.get('/api/transactions')
+            const [fetchedAccs, fetchedTxs, remoteLayout] = await Promise.all([
+                db.getAccounts(),
+                db.getTransactions(),
+                db.getLayout(),
             ]);
 
-            const fetchedAccs: Account[] = accRes.data;
-            const savedOrder = localStorage.getItem('finance_tracker_tab_order');
             let parsedLayout: number[][] = [];
-            if (savedOrder) {
-                try {
-                    const orderIds = JSON.parse(savedOrder);
-                    if (Array.isArray(orderIds) && orderIds.length > 0) {
-                        if (Array.isArray(orderIds[0])) {
-                            parsedLayout = orderIds;
-                        } else {
-                            parsedLayout = orderIds.map((id: number) => [id]);
+            if (remoteLayout && remoteLayout.length > 0) {
+                parsedLayout = remoteLayout;
+            } else {
+                const savedOrder = localStorage.getItem(LAYOUT_STORAGE_KEY);
+                if (savedOrder) {
+                    try {
+                        const orderIds = JSON.parse(savedOrder);
+                        if (Array.isArray(orderIds) && orderIds.length > 0) {
+                            if (Array.isArray(orderIds[0])) {
+                                parsedLayout = orderIds;
+                            } else {
+                                parsedLayout = orderIds.map((id: number) => [id]);
+                            }
                         }
+                    } catch (e) {
+                        console.error("Failed to parse saved tab order", e);
                     }
-                } catch (e) {
-                    console.error("Failed to parse saved tab order", e);
                 }
             }
 
@@ -94,7 +113,7 @@ function App() {
             const idsInLayout = new Set<number>();
 
             parsedLayout.forEach(group => {
-                const validGroup = group.filter(id => fetchedIds.has(id));
+                const validGroup = group.filter(id => fetchedIds.has(id) && !idsInLayout.has(id));
                 if (validGroup.length > 0) {
                     finalLayout.push(validGroup);
                     validGroup.forEach(id => idsInLayout.add(id));
@@ -109,20 +128,49 @@ function App() {
 
             setAccounts(fetchedAccs);
             setLayout(finalLayout);
-            localStorage.setItem('finance_tracker_tab_order', JSON.stringify(finalLayout));
-            setTransactions(txRes.data);
+            localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(finalLayout));
+            if (JSON.stringify(finalLayout) !== JSON.stringify(remoteLayout ?? [])) {
+                db.saveLayout(finalLayout).catch(err => console.error('Failed to sync layout', err));
+            }
+            setTransactions(fetchedTxs);
             setErrorMsg('');
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            setErrorMsg('Failed to synchronize data. Please ensure the backend dev server is online.');
+            setErrorMsg(err?.message || 'Failed to synchronize data with the database.');
         } finally {
             setIsLoading(false);
         }
-    };
-
-    useEffect(() => {
-        fetchData();
     }, []);
+
+    // Open the connection whenever the config changes, then load everything.
+    useEffect(() => {
+        if (!dbConfig) {
+            db.disconnect();
+            setAccounts([]);
+            setTransactions([]);
+            setLayout([]);
+            setIsLoading(false);
+            return;
+        }
+        db.connect(dbConfig);
+        db.ensureSchema()
+            .then(fetchData)
+            .catch((err: any) => {
+                console.error(err);
+                setErrorMsg(err?.message || 'Failed to initialise the database.');
+                setIsLoading(false);
+            });
+        return () => db.disconnect();
+    }, [dbConfig, fetchData]);
+
+    // Refresh silently when the app comes back to the foreground (mobile/desktop)
+    useEffect(() => {
+        const onVisible = () => {
+            if (document.visibilityState === 'visible' && dbConfig) fetchData();
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => document.removeEventListener('visibilitychange', onVisible);
+    }, [dbConfig, fetchData]);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -188,16 +236,39 @@ function App() {
     // =========================================================================
     // THE "TOTAL" CALCULATION
     // =========================================================================
-    // Use a simple JavaScript reduce function to compute Total Balance across all separate tabs/places
     // Total = sum of all account balances
     const totalBalance = accounts.reduce((acc, account) => acc + account.balance, 0);
+
+    // -------------------------------------------------------------------------
+    // DATABASE CONNECTION HANDLERS
+    // -------------------------------------------------------------------------
+
+    /**
+     * Validates new credentials against the live database before storing them.
+     */
+    const handleConnect = async (cfg: DbConfig) => {
+        db.connect(cfg);
+        await db.ping();
+        await db.ensureSchema();
+        saveDbConfig(cfg);
+        setErrorMsg('');
+        setIsSettingsOpen(false);
+        setDbConfig(cfg);
+    };
+
+    const handleDisconnect = () => {
+        if (!window.confirm('Disconnect from the database on this device? Your data stays safe in the cloud.')) return;
+        clearDbConfig();
+        setIsSettingsOpen(false);
+        setDbConfig(null);
+    };
 
     // -------------------------------------------------------------------------
     // ACTION HANDLERS
     // -------------------------------------------------------------------------
 
     /**
-     * Dispatches a new tracking tab creation payload to the remote backend.
+     * Creates a new tracking tab in the shared database.
      */
     const handleCreateAccount = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -209,24 +280,20 @@ function App() {
         try {
             setIsCreatingAcc(true);
             setErrorMsg('');
-            await axios.post('/api/accounts', {
-                name: newAccName.trim(),
-                balance: parseFloat(newAccBalance) || 0,
-                icon: newAccIcon
-            });
+            await db.addAccount(newAccName.trim(), parseFloat(newAccBalance) || 0, newAccIcon);
             setNewAccName('');
             setNewAccBalance('');
             await fetchData();
         } catch (err: any) {
             console.error(err);
-            setErrorMsg(err.response?.data?.error || 'Failed to setup new tab.');
+            setErrorMsg(err?.message || 'Failed to setup new tab.');
         } finally {
             setIsCreatingAcc(false);
         }
     };
 
     /**
-     * Dispatches positive or negative incremental adjustments to an existing place balance.
+     * Applies positive or negative incremental adjustments to an existing place balance.
      */
     const handleAdjustBalance = async (accountId: number, isAddition: boolean) => {
         const amountStr = adjustAmounts[accountId] || '';
@@ -242,10 +309,7 @@ function App() {
         try {
             setAdjustingId(accountId);
             setErrorMsg('');
-            await axios.post(`/api/accounts/${accountId}/adjust`, {
-                amount: finalAmount,
-                note: note
-            });
+            await db.adjustAccount(accountId, finalAmount, note);
 
             // Flush temporary input buffers for the adjusted tab
             setAdjustAmounts(prev => ({ ...prev, [accountId]: '' }));
@@ -253,7 +317,7 @@ function App() {
             await fetchData();
         } catch (err: any) {
             console.error(err);
-            setErrorMsg(err.response?.data?.error || 'Failed to update balance.');
+            setErrorMsg(err?.message || 'Failed to update balance.');
         } finally {
             setAdjustingId(null);
         }
@@ -265,31 +329,26 @@ function App() {
     const handleDeleteAccount = async (accountId: number, name: string) => {
         if (!window.confirm(`Are you sure you want to delete the "${name}" tab?`)) return;
         try {
-            await axios.delete(`/api/accounts/${accountId}`);
-            
-            // Clean local storage layout immediately to prevent stale states
+            await db.deleteAccount(accountId);
+
+            // Clean the layout immediately to prevent stale states
             const newLayout = layout.map(group => group.filter(id => id !== accountId)).filter(group => group.length > 0);
             setLayout(newLayout);
-            localStorage.setItem('finance_tracker_tab_order', JSON.stringify(newLayout));
+            persistLayout(newLayout);
 
             await fetchData();
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            setErrorMsg('Failed to delete place tab.');
+            setErrorMsg(err?.message || 'Failed to delete place tab.');
         }
     };
 
     /**
-     * Dispatches PUT modifications to rename or change icons on an existing place.
+     * Renames or changes the icon of an existing place.
      */
     const handleEditAccount = async (accountId: number, name: string, icon: string) => {
-        try {
-            await axios.put(`/api/accounts/${accountId}`, { name, icon });
-            await fetchData();
-        } catch (err: any) {
-            console.error(err);
-            throw err;
-        }
+        await db.updateAccount(accountId, name, icon);
+        await fetchData();
     };
 
     /**
@@ -297,11 +356,11 @@ function App() {
      */
     const handleDeleteTransaction = async (txId: number) => {
         try {
-            await axios.delete(`/api/transactions/${txId}`);
+            await db.deleteTransaction(txId);
             await fetchData();
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            setErrorMsg('Failed to remove trace record.');
+            setErrorMsg(err?.message || 'Failed to remove trace record.');
         }
     };
 
@@ -337,7 +396,7 @@ function App() {
                 newLayout[gIdx].splice(tIdx, 1);
                 newLayout[gIdx].splice(targetTabIndex, 0, accountId);
                 setLayout(newLayout);
-                localStorage.setItem('finance_tracker_tab_order', JSON.stringify(newLayout));
+                persistLayout(newLayout);
             }
             handleDragEnd();
             return;
@@ -353,7 +412,7 @@ function App() {
         newLayout = newLayout.filter(g => g.length > 0);
 
         setLayout(newLayout);
-        localStorage.setItem('finance_tracker_tab_order', JSON.stringify(newLayout));
+        persistLayout(newLayout);
         handleDragEnd();
     };
 
@@ -368,7 +427,7 @@ function App() {
             newLayout[gIdx].splice(tIdx, 1);
             newLayout.push([accountId]);
             setLayout(newLayout);
-            localStorage.setItem('finance_tracker_tab_order', JSON.stringify(newLayout));
+            persistLayout(newLayout);
         }
         handleDragEnd();
     };
@@ -396,11 +455,15 @@ function App() {
             </div>
 
             <div className="z-10 space-y-8 mx-auto w-full max-w-5xl">
-                <Header accountsCount={accounts.length} onOpenLedger={() => setIsLedgerOpen(true)} />
+                <Header
+                    accountsCount={accounts.length}
+                    onOpenLedger={() => setIsLedgerOpen(true)}
+                    onOpenSettings={() => setIsSettingsOpen(true)}
+                />
 
                 {errorMsg && (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-rose-500/10 backdrop-blur-md shadow-2xl shadow-rose-950/20 p-4 border border-rose-500/15 rounded-2xl text-rose-400 text-sm animate-fade-in w-full">
-                        <span className="font-medium">{errorMsg}</span>
+                        <span className="font-medium wrap-break-word">{errorMsg}</span>
                         <button
                             onClick={fetchData}
                             className="bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/10 text-rose-300 font-bold text-xs px-3 py-1.5 rounded-lg active:scale-[0.98] transition-all cursor-pointer w-max shrink-0"
@@ -531,6 +594,16 @@ function App() {
                 account={editingAccount}
                 onSave={handleEditAccount}
             />
+
+            {/* First-launch connect screen, or the settings dialog when already connected */}
+            {(!dbConfig || isSettingsOpen) && (
+                <ConnectDatabase
+                    current={dbConfig}
+                    onConnect={handleConnect}
+                    onDisconnect={dbConfig ? handleDisconnect : undefined}
+                    onClose={dbConfig ? () => setIsSettingsOpen(false) : undefined}
+                />
+            )}
         </div>
     );
 }

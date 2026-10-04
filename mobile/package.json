@@ -1,0 +1,23 @@
+{
+  "name": "money-tabs-mobile",
+  "version": "1.0.0",
+  "description": "Money Tabs - personal finance tracker (Android)",
+  "private": true,
+  "author": "Lakshya Gupta",
+  "license": "MIT",
+  "scripts": {
+    "sync": "cap sync android",
+    "icons": "capacitor-assets generate --android --iconBackgroundColor #ffffff --iconBackgroundColorDark #ffffff --splashBackgroundColor #ffffff --splashBackgroundColorDark #0a0a0a",
+    "build": "npm run sync && node scripts/build-apk.mjs",
+    "open": "cap open android",
+    "install-apk": "adb install -r release/MoneyTabs.apk"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/core": "^8.5.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.1"
+  }
+}
