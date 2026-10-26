@@ -46,21 +46,22 @@ export function LedgerSidebar({ isLedgerOpen, setIsLedgerOpen, transactions, han
             
             {/* Drawer */}
             <div className={`fixed inset-y-0 right-0 z-50 w-full sm:w-[400px] bg-neutral-950/90 backdrop-blur-xl shadow-2xl border-l border-neutral-800/60 transform transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col ${isLedgerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                <div className="flex justify-between items-center p-6 border-neutral-800/50 border-b">
+                <div className="flex justify-between items-center p-4 sm:p-6 border-neutral-800/50 border-b">
                     <h3 className="flex items-center gap-2 font-bold text-neutral-200 text-lg">
                         <History className="w-5 h-5 text-indigo-400" />
                         Audit History Ledger
                     </h3>
                     <button
                         onClick={() => setIsLedgerOpen(false)}
-                        className="hover:bg-neutral-900 p-2 rounded-xl text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                        aria-label="Close ledger"
+                        className="hover:bg-neutral-900 p-2.5 rounded-xl text-neutral-400 hover:text-white transition-colors cursor-pointer"
                     >
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
                 {/* Filter and Stats Panel */}
-                <div className="bg-neutral-900/20 px-6 py-4 border-neutral-800/30 border-b space-y-4">
+                <div className="bg-neutral-900/20 px-4 sm:px-6 py-4 border-neutral-800/30 border-b space-y-3 sm:space-y-4">
                     <div className="flex justify-between items-center">
                         <span className="flex items-center gap-2 bg-neutral-900/80 px-3 py-1.5 border border-neutral-800 text-neutral-400 rounded-lg w-max font-semibold text-xs">
                             <Activity className="w-3.5 h-3.5" />
@@ -88,7 +89,7 @@ export function LedgerSidebar({ isLedgerOpen, setIsLedgerOpen, transactions, han
                                 placeholder="Search note..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="bg-neutral-950 pl-8 pr-3 py-2 border border-neutral-800/80 focus:border-indigo-500/80 focus:ring-2 focus:ring-indigo-500/20 rounded-xl focus:outline-none w-full text-neutral-200 text-xs transition-all placeholder-neutral-600"
+                                className="bg-neutral-950 pl-8 pr-3 py-2 border border-neutral-800/80 focus:border-indigo-500/80 focus:ring-2 focus:ring-indigo-500/20 rounded-xl focus:outline-none w-full text-neutral-200 text-sm sm:text-xs transition-all placeholder-neutral-600"
                             />
                         </div>
 
@@ -97,7 +98,7 @@ export function LedgerSidebar({ isLedgerOpen, setIsLedgerOpen, transactions, han
                             <select
                                 value={selectedCategory}
                                 onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="bg-neutral-950 px-3 py-2 border border-neutral-800/80 focus:border-indigo-500/80 focus:ring-2 focus:ring-indigo-500/20 rounded-xl focus:outline-none w-full text-neutral-200 text-xs transition-all cursor-pointer"
+                                className="bg-neutral-950 px-3 py-2 border border-neutral-800/80 focus:border-indigo-500/80 focus:ring-2 focus:ring-indigo-500/20 rounded-xl focus:outline-none w-full text-neutral-200 text-sm sm:text-xs transition-all cursor-pointer"
                             >
                                 <option value="ALL">All Places</option>
                                 {categories.map(cat => (
@@ -119,16 +120,15 @@ export function LedgerSidebar({ isLedgerOpen, setIsLedgerOpen, transactions, han
                         </p>
                     </div>
                 ) : (
-                    <div className="flex-1 space-y-3 [&::-webkit-scrollbar-thumb]:bg-neutral-800 [&::-webkit-scrollbar-thumb]:hover:bg-neutral-700 [&::-webkit-scrollbar-track]:bg-neutral-950/20 p-6 pr-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar]:w-1.5 overflow-y-auto">
+                    <div className="flex-1 space-y-3 [&::-webkit-scrollbar-thumb]:bg-neutral-800 [&::-webkit-scrollbar-thumb]:hover:bg-neutral-700 [&::-webkit-scrollbar-track]:bg-neutral-950/20 p-3 sm:p-6 sm:pr-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar]:w-1.5 overflow-y-auto">
                         {displayedTransactions.map((tx) => {
                             const isGain = tx.amount >= 0;
                             return (
                                 <div
                                     key={tx.id}
-                                    title={`Added: ${tx.date_added || 'not timed'}`}
-                                    className="group flex justify-between items-center bg-neutral-900/20 hover:bg-neutral-900/40 p-4 border border-neutral-900 hover:border-neutral-800 rounded-2xl transition-all cursor-help"
+                                    className="group flex justify-between items-center gap-2 bg-neutral-900/20 hover:bg-neutral-900/40 p-3 sm:p-4 border border-neutral-900 hover:border-neutral-800 rounded-2xl transition-all"
                                 >
-                                    <div className="flex-1 mr-4 min-w-0">
+                                    <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
                                             <div className={`p-1 rounded-md ${isGain ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
                                                 {isGain ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
@@ -137,21 +137,30 @@ export function LedgerSidebar({ isLedgerOpen, setIsLedgerOpen, transactions, han
                                                 {tx.title}
                                             </span>
                                         </div>
-                                        <span className="block pl-7 font-medium text-neutral-500 text-xs">
+                                        <span className="block pl-7 font-medium text-neutral-500 text-xs truncate">
                                             Tab: <strong className="text-neutral-400">{tx.category || 'General'}</strong>
                                         </span>
+                                        {tx.date_added && tx.date_added !== 'not timed' && (
+                                            <span className="block mt-0.5 pl-7 text-[11px] text-neutral-600">{tx.date_added}</span>
+                                        )}
                                     </div>
 
-                                    <div className="flex items-center gap-3 shrink-0">
+                                    <div className="flex items-center gap-1 sm:gap-3 shrink-0">
                                         <span className={`font-black tracking-tight text-sm ${isGain ? 'text-emerald-400' : 'text-rose-400'}`}>
                                             {isGain ? '+' : ''}₹{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
 
                                         <button
                                             type="button"
-                                            onClick={() => handleDeleteTransaction(tx.id)}
+                                            onClick={() => {
+                                                const amt = `${isGain ? '+' : ''}₹${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                                                if (window.confirm(`Delete "${tx.title}" (${amt}) from ${tx.category || 'General'}?\n\nThe amount will be reversed on that tab.`)) {
+                                                    handleDeleteTransaction(tx.id);
+                                                }
+                                            }}
                                             title="Revert adjustment trace"
-                                            className="hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 transition-all cursor-pointer"
+                                            aria-label={`Delete ledger entry ${tx.title}`}
+                                            className="hover:bg-rose-500/10 active:bg-rose-500/15 p-2.5 sm:p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 transition-all cursor-pointer pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-visible:opacity-100"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>

@@ -81,7 +81,7 @@ they appear here:
 
 | Platform | File | Notes |
 | :--- | :--- | :--- |
-| Windows installer | `desktop/release/MoneyTabs-1.0.0-win-x64.exe` | Adds a Start-menu / desktop shortcut |
+| Windows installer | `desktop/release/MoneyTabs-1.1.0-win-x64.exe` | Adds a Start-menu / desktop shortcut |
 | Windows portable | `desktop/release/MoneyTabs-Portable.exe` | Single exe, no install |
 | Android | `mobile/release/MoneyTabs.apk` | Copy to the phone and open it (allow "install unknown apps"), or `adb install -r mobile/release/MoneyTabs.apk` |
 

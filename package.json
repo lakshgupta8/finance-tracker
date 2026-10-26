@@ -1,6 +1,6 @@
 {
   "name": "money-tabs",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Money Tabs - one React app packaged as a Windows desktop app and an Android APK, sharing a hosted Turso database.",
   "scripts": {

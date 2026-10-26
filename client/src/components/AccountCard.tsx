@@ -71,7 +71,7 @@ export function AccountCard({
                 e.stopPropagation();
                 handleDrop(groupIndex, tabIndex);
             }}
-            className={`relative flex flex-col justify-between p-6 transition-all duration-300 
+            className={`relative flex flex-col justify-between p-4 sm:p-6 transition-all duration-300 
                 bg-neutral-900/40 backdrop-blur-md rounded-3xl border border-white/4 shadow-xl
                 ${isOddAndLast && isGrouped ? 'md:col-span-2' : 'col-span-1'}
                 ${isDragged ? 'opacity-40 border-dashed border-neutral-600 scale-95' : 'hover:bg-neutral-900/60 hover:border-white/8 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/60'}
@@ -79,14 +79,15 @@ export function AccountCard({
         >
             <div>
                 {/* Tab Identity Header */}
-                <div className="flex justify-between items-start gap-3 mb-6">
-                    <div className="flex items-center gap-4 min-w-0">
-                        <div className="mr-1 text-neutral-500 hover:text-emerald-400 transition-colors cursor-grab">
+                <div className="flex justify-between items-start gap-2 sm:gap-3 mb-4 sm:mb-6">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        {/* Drag-and-drop needs a mouse; the grip is hidden on touch screens */}
+                        <div className="pointer-coarse:hidden mr-1 text-neutral-500 hover:text-emerald-400 transition-colors cursor-grab">
                             <GripHorizontal className="w-5 h-5" />
                         </div>
  
-                        <div className="flex justify-center items-center bg-neutral-950/60 shadow-inner border border-neutral-800/80 rounded-2xl w-12 h-12 text-emerald-400 shrink-0">
-                            <IconCmp className="w-6 h-6" />
+                        <div className="flex justify-center items-center bg-neutral-950/60 shadow-inner border border-neutral-800/80 rounded-2xl w-10 h-10 sm:w-12 sm:h-12 text-emerald-400 shrink-0">
+                            <IconCmp className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
                         <div className="min-w-0 cursor-grab">
                             <h3 className="font-bold text-neutral-200 group-hover/card:text-white text-lg truncate transition-colors">
@@ -99,13 +100,14 @@ export function AccountCard({
                     </div>
  
                     {/* Controls Panel */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2 sm:gap-1.5 shrink-0">
                         {/* Edit Button */}
                         <button
                             type="button"
                             onClick={() => onEdit(account)}
                             title="Edit this tab"
-                            className="hover:bg-emerald-500/10 p-2 rounded-xl text-neutral-500 hover:text-emerald-400 transition-all duration-200 cursor-pointer"
+                            aria-label={`Edit ${account.name}`}
+                            className="hover:bg-emerald-500/10 active:bg-emerald-500/15 p-2.5 sm:p-2 rounded-xl text-neutral-500 hover:text-emerald-400 transition-all duration-200 cursor-pointer"
                         >
                             <Pencil className="w-4 h-4" />
                         </button>
@@ -115,7 +117,8 @@ export function AccountCard({
                             type="button"
                             onClick={() => handleDeleteAccount(account.id, account.name)}
                             title="Remove this tab"
-                            className="hover:bg-rose-500/10 p-2 rounded-xl text-neutral-500 hover:text-rose-400 transition-all duration-200 cursor-pointer"
+                            aria-label={`Delete ${account.name}`}
+                            className="hover:bg-rose-500/10 active:bg-rose-500/15 p-2.5 sm:p-2 rounded-xl text-neutral-500 hover:text-rose-400 transition-all duration-200 cursor-pointer"
                         >
                             <Trash2 className="w-4 h-4" />
                         </button>
@@ -123,9 +126,9 @@ export function AccountCard({
                 </div>
  
                 {/* Isolated Live Current Balance Counter */}
-                <div className="bg-neutral-950/40 mb-6 p-4 border border-white/2 rounded-2xl">
+                <div className="bg-neutral-950/40 mb-4 sm:mb-6 p-3 sm:p-4 border border-white/2 rounded-2xl">
                     <div className="mb-1 font-medium text-neutral-500 text-xs uppercase tracking-wide">Current Balance</div>
-                    <div className={`text-3xl font-extrabold tracking-tight ${account.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <div className={`text-2xl sm:text-3xl font-extrabold tracking-tight break-all ${account.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         ₹{account.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                 </div>
@@ -141,11 +144,12 @@ export function AccountCard({
                             <span className="top-1/2 left-4 absolute font-bold text-neutral-500 text-sm -translate-y-1/2">₹</span>
                             <input
                                 type="number"
+                                inputMode="decimal"
                                 step="any"
                                 placeholder="Amount"
                                 value={amountVal}
                                 onChange={(e) => setAdjustAmounts(e.target.value)}
-                                className="bg-neutral-950/60 py-2.5 pr-3 pl-8 border border-neutral-800/80 focus:border-emerald-500/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 w-full font-medium text-neutral-200 text-sm transition-all [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder-neutral-600 [appearance:textfield]"
+                                className="bg-neutral-950/60 py-2.5 pr-3 pl-8 border border-neutral-800/80 focus:border-emerald-500/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 w-full font-medium text-neutral-200 text-base sm:text-sm transition-all [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder-neutral-600 [appearance:textfield]"
                             />
                         </div>
  
@@ -155,7 +159,7 @@ export function AccountCard({
                                 placeholder="Note (optional)"
                                 value={noteVal}
                                 onChange={(e) => setAdjustNotes(e.target.value)}
-                                className="bg-neutral-950/60 px-3 py-2.5 border border-neutral-800/80 focus:border-emerald-500/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 w-full font-medium text-neutral-200 text-sm transition-all placeholder-neutral-600"
+                                className="bg-neutral-950/60 px-3 py-2.5 border border-neutral-800/80 focus:border-emerald-500/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 w-full font-medium text-neutral-200 text-base sm:text-sm transition-all placeholder-neutral-600"
                             />
                         </div>
                     </div>
@@ -166,7 +170,7 @@ export function AccountCard({
                             type="button"
                             disabled={isAdjusting}
                             onClick={() => handleAdjustBalance(account.id, true)}
-                            className="flex justify-center items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 px-3 py-2.5 border border-emerald-500/10 hover:border-emerald-500/30 rounded-xl font-bold text-emerald-400 text-sm active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
+                            className="flex justify-center items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 px-3 py-3 sm:py-2.5 border border-emerald-500/10 hover:border-emerald-500/30 rounded-xl font-bold text-emerald-400 text-sm active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
                         >
                             <Plus className="w-4 h-4" />
                             <span>Add</span>
@@ -176,7 +180,7 @@ export function AccountCard({
                             type="button"
                             disabled={isAdjusting}
                             onClick={() => handleAdjustBalance(account.id, false)}
-                            className="flex justify-center items-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 px-3 py-2.5 border border-rose-500/10 hover:border-rose-500/30 rounded-xl font-bold text-rose-400 text-sm active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
+                            className="flex justify-center items-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 px-3 py-3 sm:py-2.5 border border-rose-500/10 hover:border-rose-500/30 rounded-xl font-bold text-rose-400 text-sm active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:pointer-events-none"
                         >
                             <Minus className="w-4 h-4" />
                             <span>Spend</span>

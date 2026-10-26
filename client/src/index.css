@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Touch devices: no grey tap flash, no double-tap-zoom delay on controls */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+button,
+a,
+input,
+select,
+textarea,
+label {
+  touch-action: manipulation;
+}
+
 html,
 body,
 #root {

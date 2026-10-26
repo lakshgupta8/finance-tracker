@@ -9,17 +9,17 @@ interface HeroBannerProps {
 
 export function HeroBanner({ accounts, totalBalance }: HeroBannerProps) {
     return (
-        <div className="group relative bg-neutral-900/35 shadow-2xl backdrop-blur-lg p-6 md:p-8 border border-white/4 rounded-4xl overflow-hidden">
+        <div className="group relative bg-neutral-900/35 shadow-2xl backdrop-blur-lg p-5 sm:p-6 md:p-8 border border-white/4 rounded-4xl overflow-hidden">
             <div className="-top-32 -right-32 absolute bg-emerald-500/15 group-hover:bg-emerald-500/25 blur-[110px] rounded-full w-96 h-96 transition-all duration-700 pointer-events-none"></div>
             <div className="-bottom-32 -left-32 absolute bg-teal-500/10 blur-[110px] rounded-full w-96 h-96 pointer-events-none"></div>
 
-            <div className="z-10 relative flex md:flex-row flex-col justify-between items-center gap-8">
-                <div className="flex-1">
+            <div className="z-10 relative flex md:flex-row flex-col justify-between items-center gap-6 md:gap-8">
+                <div className="flex-1 w-full">
                     <div className="flex items-center gap-2 mb-2 font-medium text-neutral-400 text-sm uppercase tracking-wide">
                         <LayoutDashboard className="w-4 h-4 text-emerald-400" />
                         <span>Overall Combined Total</span>
                     </div>
-                    <div className={`text-5xl md:text-6xl font-extrabold tracking-tight transition-all duration-300 ${totalBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <div className={`text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight break-all transition-all duration-300 ${totalBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         ₹{totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <p className="mt-4 max-w-sm text-neutral-400 text-sm leading-relaxed">
@@ -28,7 +28,7 @@ export function HeroBanner({ accounts, totalBalance }: HeroBannerProps) {
                 </div>
 
                 {accounts.length > 0 && (
-                    <div className="flex-1 w-full h-[180px]">
+                    <div className="flex-1 w-full h-[140px] sm:h-[180px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={accounts.map(a => ({ name: a.name, value: Math.max(0, a.balance) }))}>
                                 <XAxis dataKey="name" hide />

@@ -437,7 +437,7 @@ function App() {
 
     return (
         <div
-            className="relative flex flex-col items-center bg-neutral-950 selection:bg-emerald-500 selection:text-neutral-950 p-4 md:p-8 min-h-screen font-sans text-neutral-100 overflow-x-hidden"
+            className="relative flex flex-col items-center bg-neutral-950 selection:bg-emerald-500 selection:text-neutral-950 px-3 py-4 sm:p-4 md:p-8 min-h-screen font-sans text-neutral-100 overflow-x-hidden"
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDropOutside}
         >
@@ -454,7 +454,7 @@ function App() {
                 ></div>
             </div>
 
-            <div className="z-10 space-y-8 mx-auto w-full max-w-5xl">
+            <div className="z-10 space-y-6 sm:space-y-8 mx-auto w-full max-w-5xl">
                 <Header
                     accountsCount={accounts.length}
                     onOpenLedger={() => setIsLedgerOpen(true)}
@@ -496,7 +496,7 @@ function App() {
                                 </p>
                             </div>
                         ) : (
-                            <div className="flex flex-col gap-8 w-full">
+                            <div className="flex flex-col gap-6 sm:gap-8 w-full">
                                 {layout.map((group, groupIndex) => {
                                     const groupAccounts = group.map(id => accounts.find(a => a.id === id)).filter(Boolean) as Account[];
                                     if (groupAccounts.length === 0) return null;
@@ -505,7 +505,7 @@ function App() {
                                     return (
                                         <div
                                             key={`group-${groupIndex}`}
-                                            className={`relative flex flex-col transition-all duration-500 rounded-4xl ${groupAccounts.length > 1 ? 'p-6 md:p-8 bg-neutral-900/10 backdrop-blur-md shadow-2xl shadow-black/80 border border-neutral-800/50' : ''} ${dragOverGroupIndex === groupIndex && dragOverTabIndex === null ? 'ring-2 ring-emerald-500 scale-[1.01] bg-neutral-800/20' : ''}`}
+                                            className={`relative flex flex-col transition-all duration-500 rounded-4xl ${groupAccounts.length > 1 ? 'p-3 sm:p-6 md:p-8 bg-neutral-900/10 backdrop-blur-md shadow-2xl shadow-black/80 border border-neutral-800/50' : ''} ${dragOverGroupIndex === groupIndex && dragOverTabIndex === null ? 'ring-2 ring-emerald-500 scale-[1.01] bg-neutral-800/20' : ''}`}
                                             onDragEnter={(e) => {
                                                 e.stopPropagation();
                                                 handleDragEnter(groupIndex);
@@ -520,17 +520,17 @@ function App() {
                                             }}
                                         >
                                             {groupAccounts.length > 1 && (
-                                                <div className="flex justify-between items-center mb-6 px-2">
+                                                <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 mb-4 sm:mb-6 px-2">
                                                     <div className="flex items-center gap-3 font-bold text-neutral-400 text-sm uppercase tracking-wider">
                                                         Merged Group Total
                                                     </div>
-                                                    <div className={`text-2xl font-black tracking-tight ${groupTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                    <div className={`text-xl sm:text-2xl font-black tracking-tight ${groupTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                         ₹{groupTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </div>
                                                 </div>
                                             )}
 
-                                            <div className="gap-6 grid grid-cols-1 md:grid-cols-2 w-full">
+                                            <div className="gap-4 sm:gap-6 grid grid-cols-1 md:grid-cols-2 w-full">
                                                 {groupAccounts.map((account, tabIndex) => {
                                                     const isOddAndLast = (groupAccounts.length % 2 !== 0 && tabIndex === groupAccounts.length - 1);
                                                     return (

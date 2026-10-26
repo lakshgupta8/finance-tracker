@@ -20,7 +20,7 @@ export function CreateAccountForm({
     isCreatingAcc, handleCreateAccount
 }: CreateAccountFormProps) {
     return (
-        <div className="bg-neutral-900/30 shadow-2xl backdrop-blur-md mx-auto mt-8 p-6 md:p-8 border border-white/3 rounded-4xl w-full max-w-3xl">
+        <div className="bg-neutral-900/30 shadow-2xl backdrop-blur-md mx-auto mt-6 sm:mt-8 p-5 sm:p-6 md:p-8 border border-white/3 rounded-4xl w-full max-w-3xl">
             <h3 className="flex items-center gap-3 mb-6 font-bold text-neutral-200 text-lg">
                 <Plus className="w-5 h-5 text-emerald-400" />
                 Add New Place Tab
@@ -43,6 +43,7 @@ export function CreateAccountForm({
                         <label className="block mb-2 font-medium text-[11px] text-neutral-500 uppercase tracking-wider">Starting Balance (₹)</label>
                         <input
                             type="number"
+                            inputMode="decimal"
                             step="any"
                             placeholder="0.00"
                             value={newAccBalance}
@@ -54,7 +55,7 @@ export function CreateAccountForm({
 
                 <div>
                     <label className="block mb-3 font-medium text-[11px] text-neutral-500 uppercase tracking-wider">Select Tab Icon</label>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid grid-cols-4 sm:flex sm:flex-wrap gap-2">
                         {PRESET_ICONS.map((iconName) => {
                             const IconComponent = getIconComponent(iconName);
                             return (
@@ -62,7 +63,7 @@ export function CreateAccountForm({
                                     key={iconName}
                                     type="button"
                                     onClick={() => setNewAccIcon(iconName)}
-                                    className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all cursor-pointer ${newAccIcon === iconName
+                                    className={`w-full sm:w-12 h-12 rounded-xl flex items-center justify-center transition-all cursor-pointer ${newAccIcon === iconName
                                         ? 'bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400 scale-110 shadow-lg shadow-emerald-500/20'
                                         : 'bg-neutral-950 border border-neutral-800/80 hover:border-neutral-700 text-neutral-500 hover:text-neutral-300'
                                         }`}

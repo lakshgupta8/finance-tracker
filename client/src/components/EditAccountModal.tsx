@@ -57,7 +57,7 @@ export function EditAccountModal({ isOpen, onClose, account, onSave }: EditAccou
             />
 
             {/* Modal Body */}
-            <div className="fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-md p-6 bg-neutral-950 border border-neutral-800/80 rounded-3xl shadow-2xl animate-scale-up">
+            <div className="fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6 bg-neutral-950 border border-neutral-800/80 rounded-3xl shadow-2xl animate-scale-up">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="font-bold text-neutral-200 text-lg flex items-center gap-2">
                         <span>Edit Money Tab</span>
@@ -85,7 +85,7 @@ export function EditAccountModal({ isOpen, onClose, account, onSave }: EditAccou
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="bg-neutral-905 px-4 py-3 border border-neutral-800/80 focus:border-emerald-500/80 focus:ring-2 focus:ring-emerald-500/20 rounded-xl focus:outline-none w-full text-neutral-200 text-sm transition-all"
+                            className="bg-neutral-900 px-4 py-3 border border-neutral-800/80 focus:border-emerald-500/80 focus:ring-2 focus:ring-emerald-500/20 rounded-xl focus:outline-none w-full text-neutral-200 text-base sm:text-sm transition-all"
                             placeholder="e.g. Cash, Bank Account"
                         />
                     </div>
@@ -94,7 +94,7 @@ export function EditAccountModal({ isOpen, onClose, account, onSave }: EditAccou
                         <label className="block mb-3 font-medium text-[11px] text-neutral-500 uppercase tracking-wider">
                             Select Tab Icon
                         </label>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="grid grid-cols-4 sm:flex sm:flex-wrap gap-2">
                             {PRESET_ICONS.map((iconName) => {
                                 const IconComponent = getIconComponent(iconName);
                                 return (
@@ -102,7 +102,7 @@ export function EditAccountModal({ isOpen, onClose, account, onSave }: EditAccou
                                         key={iconName}
                                         type="button"
                                         onClick={() => setIcon(iconName)}
-                                        className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                                        className={`w-full sm:w-11 h-11 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
                                             icon === iconName
                                                 ? 'bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400 scale-105 shadow-md shadow-emerald-500/10'
                                                 : 'bg-neutral-900 border border-neutral-800/80 hover:border-neutral-700 text-neutral-500 hover:text-neutral-300'
