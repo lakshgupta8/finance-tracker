@@ -107,7 +107,7 @@ export function ConnectDatabase({ current, onConnect, onDisconnect, onClose }: C
                     <p className="text-neutral-500 text-xs leading-relaxed">
                         Create a free database at <strong className="text-neutral-300">turso.tech</strong>, then copy its URL and
                         generate a token from the dashboard (or run <code className="text-neutral-300">turso db tokens create &lt;name&gt;</code>).
-                        The credentials are stored only on this device.
+                        The credentials are stored only on this device. After the first sync the app also works offline.
                     </p>
 
                     <div className="flex gap-3 pt-1">

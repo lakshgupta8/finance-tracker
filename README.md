@@ -14,8 +14,9 @@
   </p>
 
 > One React code-base packaged twice: a **Windows desktop app** (Electron) and an **Android APK** (Capacitor).
-> Both talk directly to a single free, hosted **Turso** (libSQL / SQLite-compatible) database, so every
-> balance, ledger entry and even the tab grouping layout stays in sync across devices.
+> Both keep a full **offline copy** on the device and sync it with a single free, hosted **Turso**
+> (libSQL / SQLite-compatible) database, so every balance, ledger entry and even the tab grouping
+> layout stays in sync across devices, with or without a connection.
 
 </div>
 
@@ -27,17 +28,16 @@
 
 ```
 finance-tracker/
-├── client/    React + Vite + Tailwind app (shared UI, talks SQL to Turso over HTTPS)
+├── client/    React + Vite + Tailwind app (shared UI, offline copy + sync engine, tests)
 ├── desktop/   Electron shell  -> Windows installer + portable exe
 ├── mobile/    Capacitor shell -> Android APK
 ├── assets/    Icon generator (Windows .ico + Android launcher/splash from the card glyph)
 └── seed/      One-shot script that uploads data from the old SQLite file into the cloud database
 ```
 
-There is no server to run any more. The former Flask REST API (`server/`) and the
-`start_tracker.bat` launcher were removed; their logic now lives in
-[client/src/lib/db.ts](client/src/lib/db.ts), where every old endpoint is a function that runs
-its SQL as a single transactional batch against the hosted database.
+There is no server to run. The former Flask REST API (`server/`) and the `start_tracker.bat`
+launcher were removed; the app reads and writes an offline copy on the device
+([client/src/lib/sync.ts](client/src/lib/sync.ts)) that syncs with Turso in the background.
 
 | Feature | Description |
 | :--- | :--- |
@@ -45,7 +45,7 @@ its SQL as a single transactional batch against the hosted database.
 | **Drag & Drop Merging** | Group tabs into combined totals (desktop, with a mouse). The grouping is saved in the database, so the phone shows the same arrangement. |
 | **Audit History Ledger** | Every Quick Add / Spend leaves a timestamped trace; deleting a trace reverses it atomically. |
 | **Real-time Analytics** | Recharts bar chart of every tab's balance. |
-| **Auto refresh** | Data reloads whenever the app returns to the foreground. |
+| **Works offline** | Everything works with no connection; changes upload automatically when it returns. See [Offline mode](#offline-mode). |
 
 ---
 
@@ -67,12 +67,41 @@ file to `seed/data.db` (any `*.db` in `seed/` is git-ignored, so it never gets c
 python seed/seed.py --url libsql://money-tabs-<yourname>.turso.io --token <TOKEN>
 ```
 
-Use `--db <path>` to read the SQLite file from somewhere else instead. The script creates the
-tables, copies every account and transaction with the original ids, and prints the row counts and
-combined balance so you can compare. It refuses to write into a database that already has data
-unless you pass `--wipe`. No extra Python packages are needed.
+Use `--db <path>` to read the SQLite file from somewhere else instead. The script copies every
+account and transaction with the original ids and prints the row counts and combined balance so you
+can compare. It refuses to write into a database that already has data unless you pass `--wipe`.
+No extra Python packages are needed.
+
+The script writes the original table layout; the first app to connect upgrades it for offline sync
+(balances are checked to stay identical). After a `--wipe`, devices that were already connected
+should **Disconnect** and connect again in Database settings so their offline copy is rebuilt.
 
 Starting fresh? Skip this step; the apps create the tables on first connect.
+
+## Offline mode
+
+Each device keeps a full copy of the database (IndexedDB inside the app) and shows it immediately,
+so the app opens and works with no connection. The pill in the header shows the state:
+**Synced**, **Syncing**, **Offline · N pending** (changes saved on the device, waiting to upload)
+or **Sync error**. Tap it to sync right away; otherwise it syncs after every change, when the
+connection returns, when the app comes to the foreground, and every 30 seconds.
+
+How the sync works:
+
+- **Upload time drives downloads.** When a row is uploaded, the database stamps it with its own
+  clock (`synced_at`). Each device downloads only rows uploaded since its last sync, so a phone
+  with a wrong clock can never cause changes to be missed.
+- **Balances are computed from the ledger.** Spends and additions are separate ledger rows that
+  are only ever added or deleted, so offline edits made on two devices always add up instead of
+  overwriting each other.
+- **Renames, icons and the tab layout: the most recent edit wins** (`updated_at`), even if the
+  older edit happens to upload later.
+- **Deletions always win**, so a deleted tab or ledger entry never comes back from another device.
+
+The first time a device connects it needs a connection to download the data. Disconnecting in
+Database settings removes that device's offline copy (it warns if changes are still waiting to
+upload). Older app versions (1.1.0 and earlier) can still write to an upgraded database during
+the transition, but install the update on every device as soon as possible.
 
 ## 3. Build and install the apps
 
@@ -81,7 +110,7 @@ they appear here:
 
 | Platform | File | Notes |
 | :--- | :--- | :--- |
-| Windows installer | `desktop/release/MoneyTabs-1.1.0-win-x64.exe` | Adds a Start-menu / desktop shortcut |
+| Windows installer | `desktop/release/MoneyTabs-1.2.0-win-x64.exe` | Adds a Start-menu / desktop shortcut |
 | Windows portable | `desktop/release/MoneyTabs-Portable.exe` | Single exe, no install |
 | Android | `mobile/release/MoneyTabs.apk` | Copy to the phone and open it (allow "install unknown apps"), or `adb install -r mobile/release/MoneyTabs.apk` |
 
@@ -121,6 +150,7 @@ Other useful commands:
 | Command | Where | What |
 | :--- | :--- | :--- |
 | `bun run dev` | client/ | Hot-reloading web preview in the browser |
+| `npm test` | client/ | Sync, migration and seed tests against a local Turso stand-in (Node 22.6+) |
 | `npm start` | desktop/ | Launch the Electron app without packaging |
 | `npm run open` | mobile/ | Open the Android project in Android Studio |
 | `npm run install-apk` | mobile/ | Install the built APK on a USB-connected phone |
@@ -155,7 +185,6 @@ require an opaque background layer, so the launcher icon is the same glyph on a 
 
 ## Notes and limitations
 
-- **Internet required.** There is no offline cache; the apps read and write the cloud database live.
 - **Drag-and-drop is mouse-only.** HTML5 drag events do not fire from touch, so arrange groups on
   the desktop; the phone will show the same grouping.
 - **Security model.** The Turso token grants full access to the database. It is stored in plain

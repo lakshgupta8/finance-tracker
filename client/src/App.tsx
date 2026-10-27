@@ -2,11 +2,13 @@
  * FINANCE TRACKER GUI LAYER
  * Separate Places/Tabs tracking application built with React, TypeScript, & Tailwind.
  * Mirrors physical note-taking tabs to easily add or subtract money per location.
- * Runs identically inside the Windows (Electron) and Android (Capacitor) shells
- * and talks straight to one shared hosted database.
+ * Runs identically inside the Windows (Electron) and Android (Capacitor) shells.
+ * All reads and writes go to an offline copy on the device (lib/sync.ts), which
+ * syncs with the shared hosted database in the background.
  * ============================================================================= */
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { createClient } from '@libsql/client/web';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { CreateAccountForm } from './components/CreateAccountForm';
@@ -14,11 +16,30 @@ import { LedgerSidebar } from './components/LedgerSidebar';
 import { AccountCard } from './components/AccountCard';
 import { EditAccountModal } from './components/EditAccountModal';
 import { ConnectDatabase } from './components/ConnectDatabase';
-import type { Account, Transaction } from './types';
-import * as db from './lib/db';
+import type { Account } from './types';
+import { SyncedRepo, ensureRemoteSchema, friendlyError, type RepoView, type SyncStatus } from './lib/sync';
+import { IndexedDbStore, localStoreNameFor } from './lib/localStore';
 import { loadDbConfig, saveDbConfig, clearDbConfig, type DbConfig } from './lib/config';
 
-const LAYOUT_STORAGE_KEY = 'finance_tracker_tab_order';
+const EMPTY_VIEW: RepoView = { accounts: [], transactions: [], layout: null, neverSynced: true };
+const IDLE_STATUS: SyncStatus = { state: 'idle', pending: 0, lastSyncedAt: null, error: null };
+
+/** Applies the saved grouping to the live tabs: drops deleted ids, appends new tabs. */
+function reconcileLayout(saved: number[][] | null, accounts: Account[]): number[][] {
+    const liveIds = new Set(accounts.map(a => a.id));
+    const placed = new Set<number>();
+    const result: number[][] = [];
+    for (const group of saved ?? []) {
+        if (!Array.isArray(group)) continue;
+        const valid = group.filter(id => liveIds.has(id) && !placed.has(id));
+        if (valid.length > 0) {
+            result.push(valid);
+            valid.forEach(id => placed.add(id));
+        }
+    }
+    accounts.forEach(a => { if (!placed.has(a.id)) result.push([a.id]); });
+    return result;
+}
 
 function App() {
     // -------------------------------------------------------------------------
@@ -29,11 +50,16 @@ function App() {
     const [dbConfig, setDbConfig] = useState<DbConfig | null>(() => loadDbConfig());
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-    // Persistent storage records retrieved from the shared database
-    const [accounts, setAccounts] = useState<Account[]>([]);
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    // Offline-first repository for the connected database, and what it currently shows
+    const [repo, setRepo] = useState<SyncedRepo | null>(null);
+    const [view, setView] = useState<RepoView>(EMPTY_VIEW);
+    const [syncStatus, setSyncStatus] = useState<SyncStatus>(IDLE_STATUS);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState('');
+
+    const accounts = view.accounts;
+    const transactions = view.transactions;
+    const layout = useMemo(() => reconcileLayout(view.layout, view.accounts), [view]);
 
     // Creation modal/form inputs for spinning up a separate new place tab
     const [newAccName, setNewAccName] = useState('');
@@ -53,7 +79,6 @@ function App() {
     const [draggedItem, setDraggedItem] = useState<{ gIdx: number, tIdx: number } | null>(null);
     const [dragOverGroupIndex, setDragOverGroupIndex] = useState<number | null>(null);
     const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null);
-    const [layout, setLayout] = useState<number[][]>([]);
 
     // UI toggles
     const [isLedgerOpen, setIsLedgerOpen] = useState(false);
@@ -63,114 +88,62 @@ function App() {
     const [isEditingModalOpen, setIsEditingModalOpen] = useState(false);
 
     // -------------------------------------------------------------------------
-    // DATA FETCHING & SYNCHRONIZATION
+    // OFFLINE COPY & SYNCHRONIZATION
     // -------------------------------------------------------------------------
 
-    /**
-     * Persists the tab grouping/order both locally (instant) and in the shared
-     * database (so every device sees the same arrangement).
-     */
-    const persistLayout = (newLayout: number[][]) => {
-        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(newLayout));
-        db.saveLayout(newLayout).catch(err => console.error('Failed to sync layout', err));
-    };
-
-    /**
-     * Executes concurrent queries to pull updated balances, trace history and layout.
-     */
-    const fetchData = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            const [fetchedAccs, fetchedTxs, remoteLayout] = await Promise.all([
-                db.getAccounts(),
-                db.getTransactions(),
-                db.getLayout(),
-            ]);
-
-            let parsedLayout: number[][] = [];
-            if (remoteLayout && remoteLayout.length > 0) {
-                parsedLayout = remoteLayout;
-            } else {
-                const savedOrder = localStorage.getItem(LAYOUT_STORAGE_KEY);
-                if (savedOrder) {
-                    try {
-                        const orderIds = JSON.parse(savedOrder);
-                        if (Array.isArray(orderIds) && orderIds.length > 0) {
-                            if (Array.isArray(orderIds[0])) {
-                                parsedLayout = orderIds;
-                            } else {
-                                parsedLayout = orderIds.map((id: number) => [id]);
-                            }
-                        }
-                    } catch (e) {
-                        console.error("Failed to parse saved tab order", e);
-                    }
-                }
-            }
-
-            const fetchedIds = new Set(fetchedAccs.map(a => a.id));
-            const finalLayout: number[][] = [];
-            const idsInLayout = new Set<number>();
-
-            parsedLayout.forEach(group => {
-                const validGroup = group.filter(id => fetchedIds.has(id) && !idsInLayout.has(id));
-                if (validGroup.length > 0) {
-                    finalLayout.push(validGroup);
-                    validGroup.forEach(id => idsInLayout.add(id));
-                }
-            });
-
-            fetchedAccs.forEach(a => {
-                if (!idsInLayout.has(a.id)) {
-                    finalLayout.push([a.id]);
-                }
-            });
-
-            setAccounts(fetchedAccs);
-            setLayout(finalLayout);
-            localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(finalLayout));
-            if (JSON.stringify(finalLayout) !== JSON.stringify(remoteLayout ?? [])) {
-                db.saveLayout(finalLayout).catch(err => console.error('Failed to sync layout', err));
-            }
-            setTransactions(fetchedTxs);
-            setErrorMsg('');
-        } catch (err: any) {
-            console.error(err);
-            setErrorMsg(err?.message || 'Failed to synchronize data with the database.');
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    // Open the connection whenever the config changes, then load everything.
+    // Open this device's offline copy for the configured database, show it
+    // immediately (works with no connection), then keep it synced in the background.
     useEffect(() => {
         if (!dbConfig) {
-            db.disconnect();
-            setAccounts([]);
-            setTransactions([]);
-            setLayout([]);
+            setRepo(null);
+            setView(EMPTY_VIEW);
+            setSyncStatus(IDLE_STATUS);
             setIsLoading(false);
             return;
         }
-        db.connect(dbConfig);
-        db.ensureSchema()
-            .then(fetchData)
-            .catch((err: any) => {
+        let cancelled = false;
+        const r = new SyncedRepo(
+            new IndexedDbStore(localStoreNameFor(dbConfig.url)),
+            createClient({ url: dbConfig.url, authToken: dbConfig.authToken }),
+        );
+        setIsLoading(true);
+        const unsubscribe = r.subscribe(() => {
+            if (cancelled) return;
+            setView(r.getView());
+            setSyncStatus(r.getStatus());
+        });
+        r.init()
+            .then(() => {
+                if (cancelled) return;
+                setRepo(r);
+                setView(r.getView());
+                setSyncStatus(r.getStatus());
+                setIsLoading(false);
+                r.startAutoSync();
+            })
+            .catch((err) => {
                 console.error(err);
-                setErrorMsg(err?.message || 'Failed to initialise the database.');
+                if (cancelled) return;
+                setErrorMsg(`Could not open the offline copy on this device: ${friendlyError(err)}`);
                 setIsLoading(false);
             });
-        return () => db.disconnect();
-    }, [dbConfig, fetchData]);
-
-    // Refresh silently when the app comes back to the foreground (mobile/desktop)
-    useEffect(() => {
-        const onVisible = () => {
-            if (document.visibilityState === 'visible' && dbConfig) fetchData();
+        // Ask the OS not to evict the offline copy under storage pressure.
+        navigator.storage?.persist?.().catch(() => undefined);
+        return () => {
+            cancelled = true;
+            unsubscribe();
+            r.stop();
         };
-        document.addEventListener('visibilitychange', onVisible);
-        return () => document.removeEventListener('visibilitychange', onVisible);
-    }, [dbConfig, fetchData]);
+    }, [dbConfig]);
+
+    /** Saves the tab grouping/order (offline copy first, then synced to every device). */
+    const persistLayout = (newLayout: number[][]) => {
+        repo?.saveLayout(newLayout).catch(err => setErrorMsg(err?.message || 'Failed to save the layout.'));
+    };
+
+    const syncNow = () => {
+        repo?.sync();
+    };
 
     useEffect(() => {
         const handleScroll = () => {
@@ -244,57 +217,70 @@ function App() {
     // -------------------------------------------------------------------------
 
     /**
-     * Validates new credentials against the live database before storing them.
+     * Validates new credentials against the live database (and upgrades its
+     * tables if needed) before storing them. Needs a connection the first time.
      */
     const handleConnect = async (cfg: DbConfig) => {
-        db.connect(cfg);
-        await db.ping();
-        await db.ensureSchema();
+        const probe = createClient({ url: cfg.url, authToken: cfg.authToken });
+        try {
+            await probe.execute('SELECT 1');
+            await ensureRemoteSchema(probe);
+        } catch (err) {
+            throw new Error(friendlyError(err));
+        } finally {
+            probe.close();
+        }
         saveDbConfig(cfg);
         setErrorMsg('');
         setIsSettingsOpen(false);
         setDbConfig(cfg);
     };
 
-    const handleDisconnect = () => {
-        if (!window.confirm('Disconnect from the database on this device? Your data stays safe in the cloud.')) return;
+    const handleDisconnect = async () => {
+        const pending = syncStatus.pending;
+        const question = pending > 0
+            ? `${pending} change${pending === 1 ? ' has' : 's have'} not been uploaded from this device yet and will be lost.\n\nDisconnect anyway?`
+            : 'Disconnect from the database on this device?\n\nYour data stays safe in the cloud; only the offline copy on this device is removed.';
+        if (!window.confirm(question)) return;
+        const current = repo;
         clearDbConfig();
         setIsSettingsOpen(false);
         setDbConfig(null);
+        try {
+            await current?.destroyLocalCopy();
+        } catch (err) {
+            console.error('Failed to remove the offline copy', err);
+        }
+    };
+
+    const requireRepo = (): SyncedRepo => {
+        if (!repo) throw new Error('The offline copy is still loading. Try again in a moment.');
+        return repo;
     };
 
     // -------------------------------------------------------------------------
-    // ACTION HANDLERS
+    // ACTION HANDLERS (all instant and offline-capable; uploads happen in the background)
     // -------------------------------------------------------------------------
 
-    /**
-     * Creates a new tracking tab in the shared database.
-     */
     const handleCreateAccount = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!newAccName.trim()) {
             setErrorMsg('Please specify a valid name for the new place of money.');
             return;
         }
-
         try {
             setIsCreatingAcc(true);
             setErrorMsg('');
-            await db.addAccount(newAccName.trim(), parseFloat(newAccBalance) || 0, newAccIcon);
+            await requireRepo().addAccount(newAccName.trim(), parseFloat(newAccBalance) || 0, newAccIcon);
             setNewAccName('');
             setNewAccBalance('');
-            await fetchData();
         } catch (err: any) {
-            console.error(err);
             setErrorMsg(err?.message || 'Failed to setup new tab.');
         } finally {
             setIsCreatingAcc(false);
         }
     };
 
-    /**
-     * Applies positive or negative incremental adjustments to an existing place balance.
-     */
     const handleAdjustBalance = async (accountId: number, isAddition: boolean) => {
         const amountStr = adjustAmounts[accountId] || '';
         const parsed = parseFloat(amountStr);
@@ -302,64 +288,39 @@ function App() {
             setErrorMsg('Please enter a valid positive numeric amount to add or subtract.');
             return;
         }
-
         const finalAmount = isAddition ? parsed : -parsed;
         const note = adjustNotes[accountId]?.trim() || (isAddition ? 'Added funds' : 'Spent funds');
-
         try {
             setAdjustingId(accountId);
             setErrorMsg('');
-            await db.adjustAccount(accountId, finalAmount, note);
-
-            // Flush temporary input buffers for the adjusted tab
+            await requireRepo().adjustAccount(accountId, finalAmount, note);
             setAdjustAmounts(prev => ({ ...prev, [accountId]: '' }));
             setAdjustNotes(prev => ({ ...prev, [accountId]: '' }));
-            await fetchData();
         } catch (err: any) {
-            console.error(err);
             setErrorMsg(err?.message || 'Failed to update balance.');
         } finally {
             setAdjustingId(null);
         }
     };
 
-    /**
-     * Deletes a place tab permanently upon confirmation.
-     */
     const handleDeleteAccount = async (accountId: number, name: string) => {
         if (!window.confirm(`Are you sure you want to delete the "${name}" tab?`)) return;
         try {
-            await db.deleteAccount(accountId);
-
-            // Clean the layout immediately to prevent stale states
-            const newLayout = layout.map(group => group.filter(id => id !== accountId)).filter(group => group.length > 0);
-            setLayout(newLayout);
-            persistLayout(newLayout);
-
-            await fetchData();
+            await requireRepo().deleteAccount(accountId);
         } catch (err: any) {
-            console.error(err);
             setErrorMsg(err?.message || 'Failed to delete place tab.');
         }
     };
 
-    /**
-     * Renames or changes the icon of an existing place.
-     */
+    /** Throws on failure so the edit dialog can show the message. */
     const handleEditAccount = async (accountId: number, name: string, icon: string) => {
-        await db.updateAccount(accountId, name, icon);
-        await fetchData();
+        await requireRepo().updateAccount(accountId, name, icon);
     };
 
-    /**
-     * Reverts a ledger trace log item.
-     */
     const handleDeleteTransaction = async (txId: number) => {
         try {
-            await db.deleteTransaction(txId);
-            await fetchData();
+            await requireRepo().deleteTransaction(txId);
         } catch (err: any) {
-            console.error(err);
             setErrorMsg(err?.message || 'Failed to remove trace record.');
         }
     };
@@ -395,7 +356,6 @@ function App() {
             if (targetTabIndex !== undefined && targetTabIndex !== tIdx) {
                 newLayout[gIdx].splice(tIdx, 1);
                 newLayout[gIdx].splice(targetTabIndex, 0, accountId);
-                setLayout(newLayout);
                 persistLayout(newLayout);
             }
             handleDragEnd();
@@ -411,7 +371,6 @@ function App() {
         }
         newLayout = newLayout.filter(g => g.length > 0);
 
-        setLayout(newLayout);
         persistLayout(newLayout);
         handleDragEnd();
     };
@@ -426,7 +385,6 @@ function App() {
             const accountId = newLayout[gIdx][tIdx];
             newLayout[gIdx].splice(tIdx, 1);
             newLayout.push([accountId]);
-            setLayout(newLayout);
             persistLayout(newLayout);
         }
         handleDragEnd();
@@ -457,6 +415,8 @@ function App() {
             <div className="z-10 space-y-6 sm:space-y-8 mx-auto w-full max-w-5xl">
                 <Header
                     accountsCount={accounts.length}
+                    syncStatus={syncStatus}
+                    onSyncNow={syncNow}
                     onOpenLedger={() => setIsLedgerOpen(true)}
                     onOpenSettings={() => setIsSettingsOpen(true)}
                 />
@@ -465,17 +425,26 @@ function App() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-rose-500/10 backdrop-blur-md shadow-2xl shadow-rose-950/20 p-4 border border-rose-500/15 rounded-2xl text-rose-400 text-sm animate-fade-in w-full">
                         <span className="font-medium wrap-break-word">{errorMsg}</span>
                         <button
-                            onClick={fetchData}
+                            onClick={() => setErrorMsg('')}
                             className="bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/10 text-rose-300 font-bold text-xs px-3 py-1.5 rounded-lg active:scale-[0.98] transition-all cursor-pointer w-max shrink-0"
                         >
-                            Retry Connection
+                            Dismiss
                         </button>
                     </div>
                 )}
 
                 <HeroBanner accounts={accounts} totalBalance={totalBalance} />
 
-                {isLoading && accounts.length === 0 ? (
+                {dbConfig && view.neverSynced && accounts.length === 0 && (syncStatus.state === 'offline' || syncStatus.state === 'error') && (
+                    <div className="bg-amber-500/10 p-4 border border-amber-500/20 rounded-2xl text-amber-300 text-sm">
+                        <p className="font-bold">This device has not downloaded your data yet.</p>
+                        <p className="mt-1 text-amber-200/70 text-xs leading-relaxed">
+                            {syncStatus.error} It needs to connect once; after that the app works offline and syncs whenever a connection is available.
+                        </p>
+                    </div>
+                )}
+
+                {(isLoading || (view.neverSynced && syncStatus.state === 'syncing')) && accounts.length === 0 ? (
                     <div className="flex flex-col justify-center items-center space-y-3 py-16 text-neutral-500">
                         <svg className="w-8 h-8 text-emerald-500 animate-spin" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

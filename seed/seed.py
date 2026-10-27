@@ -8,8 +8,12 @@ Usage (from the repo root):
 
 Options:
     --db PATH   SQLite file to read (default: seed/data.db)
-    --wipe      Delete existing rows in the cloud tables before inserting.
+    --wipe      Replace whatever the cloud database already holds.
                 Without this flag the script refuses to touch a non-empty database.
+
+The data is written in the original (v1) table layout. The apps upgrade it to
+the offline-sync layout automatically the first time they connect, using the
+same tested migration as any older database (client/src/lib/schema.ts).
 
 No third-party packages required: uses the stdlib sqlite3 module and talks to
 Turso over its plain HTTP pipeline API.
@@ -25,7 +29,8 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# Must stay identical to SCHEMA_SQL in client/src/lib/db.ts
+# The original (v1) layout; the apps upgrade it on first connect
+# (see MIGRATE_V1_TO_V2 in client/src/lib/schema.ts).
 SCHEMA = [
     """CREATE TABLE IF NOT EXISTS account (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,22 +150,25 @@ def main():
 
     cloud = Turso(a.url, a.token)
     print("Connecting to", http_url(a.url))
-    cloud.pipeline([(s, None) for s in SCHEMA])
-
-    existing_acc = int(scalar(cloud.execute("SELECT COUNT(*) FROM account")))
-    existing_tx = int(scalar(cloud.execute('SELECT COUNT(*) FROM "transaction"')))
-    if existing_acc or existing_tx:
-        if not a.wipe:
-            sys.exit(
-                f"Cloud database already holds {existing_acc} accounts and {existing_tx} transactions.\n"
-                "Re-run with --wipe to replace them."
-            )
-        print(f"Wiping {existing_acc} accounts and {existing_tx} transactions...")
-        cloud.transaction([
-            ('DELETE FROM "transaction"', None),
-            ("DELETE FROM account", None),
-            ("DELETE FROM sqlite_sequence WHERE name IN ('account', 'transaction')", None),
-        ])
+    tables = cloud.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('account', 'transaction', 'settings')")
+    present = {row[0]["value"] for row in tables["rows"]}
+    existing_acc = int(scalar(cloud.execute("SELECT COUNT(*) FROM account"))) if "account" in present else 0
+    existing_tx = int(scalar(cloud.execute('SELECT COUNT(*) FROM "transaction"'))) if "transaction" in present else 0
+    if (existing_acc or existing_tx) and not a.wipe:
+        sys.exit(
+            f"Cloud database already holds {existing_acc} accounts and {existing_tx} transactions.\n"
+            "Re-run with --wipe to replace them."
+        )
+    if present:
+        print(f"Replacing existing tables ({existing_acc} accounts, {existing_tx} transactions)...")
+    # Start from clean tables (whichever layout was there), then create the v1 layout.
+    cloud.transaction([
+        ('DROP TABLE IF EXISTS "transaction"', None),
+        ("DROP TABLE IF EXISTS account", None),
+        ("DROP TABLE IF EXISTS settings", None),
+        *[(sql, None) for sql in SCHEMA],
+    ])
 
     # Accounts (ids preserved so any saved tab layout keeps pointing at the right tabs)
     cloud.transaction([
@@ -189,6 +197,10 @@ def main():
     if n_acc != len(accounts) or n_tx != len(txs):
         sys.exit("Row counts do not match the local file - please inspect.")
     print("Seed complete.")
+    print("Open either app once while online: it upgrades these tables for offline sync.")
+    if present:
+        print("Devices that were already connected: open Database settings, Disconnect, then connect again,\n"
+              "so their offline copy is rebuilt from the new data.")
 
 
 if __name__ == "__main__":
